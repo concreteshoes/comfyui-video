@@ -41,7 +41,10 @@ Pre-installed custom nodes:
 - ComfyUI-LivePortraitKJ  
 - ComfyUI_wav2lip  
 - ComfyUI-AnimateDiff-Evolved  
-- ComfyUI_IPAdapter_plus  
+- ComfyUI_IPAdapter_plus
+- ComfyUI-RIFE-TensorRT-Auto
+- ComfyUI-Upscaler-TensorRT-Auto
+- ComfyUI-QwenVL-Mod  
 - rgthree-comfy  
 - ComfyUI_JPS-Nodes  
 - ComfyUI_Comfyroll_CustomNodes  
