@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 git clone https://github.com/concreteshoes/comfyui-wan.git
 
 # Export environment variables
@@ -35,7 +37,7 @@ extract_env() {
     chmod +x /etc/profile.d/container_env.sh
 }
 
-extract_env "DOWNLOAD_*|DEBUG_MODELS|CIVITAI_TOKEN|SSH_PUBLIC_KEY"
+extract_env "DOWNLOAD_*|USE_FP8_*|CIVITAI_TOKEN|SSH_PUBLIC_KEY"
 chmod +x /etc/profile.d/container_env.sh
 
 mv comfyui-wan/src/start.sh /
