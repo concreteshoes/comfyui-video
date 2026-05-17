@@ -163,6 +163,19 @@ RUN --mount=type=cache,target=/root/.cache/pip \
             git clone --depth 1 "$repo"; \
         fi; \
         \
+        # ComfyUI-Frame-Interpolation sed patch
+        if [ "$repo_dir" = "ComfyUI-Frame-Interpolation" ]; then \
+            if [ -f "$repo_dir/requirements-with-cupy.txt" ]; then \
+                echo "🛠️ Harmonizing ComfyUI-Frame-Interpolation cupy requirements..."; \
+                sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$repo_dir/requirements-with-cupy.txt"; \
+                sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$repo_dir/requirements-with-cupy.txt"; \
+                sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$repo_dir/requirements-with-cupy.txt"; \
+                sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$repo_dir/requirements-with-cupy.txt"; \
+                sed -i -E 's/^Pillow([>=<~= ]+[0-9.]+)?$/# Pillow already installed/g' "$repo_dir/requirements-with-cupy.txt"; \
+                sed -i -E 's/^cupy-wheel$/cupy-cuda12x/g' "$repo_dir/requirements-with-cupy.txt"; \
+            fi; \
+        fi; \
+        \
         # 4. Harmonize and Install Requirements
         if [ -f "$repo_dir/requirements.txt" ]; then \
             echo "🛠️ Harmonizing Dependencies for $repo_dir..."; \
