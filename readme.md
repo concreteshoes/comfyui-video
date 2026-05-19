@@ -85,6 +85,7 @@ Pre-installed custom nodes:
 ### Auth Tokens
 
 ```env
+HUGGINGFACE_API_KEY=""
 CIVITAI_TOKEN=""
 SSH_PUBLIC_KEY=""
 ```

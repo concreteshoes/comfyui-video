@@ -13,7 +13,7 @@ extract_env() {
 
     local env_file=""
     for pid in /proc/[0-9]*; do
-        if tr '\0' '\n' < "$pid/environ" 2> /dev/null | grep -q GEMINI_API_KEY; then
+        if tr '\0' '\n' < "$pid/environ" 2> /dev/null | grep -E -q "DOWNLOAD_.*|USE_FP8_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|SSH_PUBLIC_KEY"; then
             env_file="$pid/environ"
             echo "Using env from $pid"
             break
@@ -37,7 +37,7 @@ extract_env() {
     chmod +x /etc/profile.d/container_env.sh
 }
 
-extract_env "DOWNLOAD_*|USE_FP8_*|CIVITAI_TOKEN|SSH_PUBLIC_KEY"
+extract_env "DOWNLOAD_.*|USE_FP8_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|SSH_PUBLIC_KEY"
 chmod +x /etc/profile.d/container_env.sh
 
 mv comfyui-wan/src/start.sh /
