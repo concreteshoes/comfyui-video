@@ -44,7 +44,9 @@ Pre-installed custom nodes:
 - ComfyUI_IPAdapter_plus
 - ComfyUI-RIFE-TensorRT-Auto
 - ComfyUI-Upscaler-TensorRT-Auto
-- ComfyUI-QwenVL-Mod  
+- ComfyUI-QwenVL-Mod
+- ComfyUI-Wan-SVI2Pro-FLF
+- ComfyUI-HuggingFace  
 - rgthree-comfy  
 - ComfyUI_JPS-Nodes  
 - ComfyUI_Comfyroll_CustomNodes  

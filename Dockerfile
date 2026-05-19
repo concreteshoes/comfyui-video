@@ -119,6 +119,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         https://github.com/huchukato/ComfyUI-RIFE-TensorRT-Auto.git \
         https://github.com/huchukato/ComfyUI-Upscaler-TensorRT-Auto.git \
         https://github.com/huchukato/ComfyUI-QwenVL-Mod.git \
+        https://github.com/Well-Made/ComfyUI-Wan-SVI2Pro-FLF.git \
+        https://github.com/huchukato/ComfyUI-HuggingFace.git \
         https://github.com/rgthree/rgthree-comfy.git \
         https://github.com/JPS-GER/ComfyUI_JPS-Nodes.git \
         https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes.git \

@@ -351,6 +351,7 @@ LORAS_DIR="$NETWORK_VOLUME/ComfyUI/models/loras"
 DETECTION_DIR="$NETWORK_VOLUME/ComfyUI/models/detection"
 AUDIO_ENCODERS_DIR="$NETWORK_VOLUME/ComfyUI/models/audio_encoders"
 LATENTSYNC_DIR="$NETWORK_VOLUME/ComfyUI/models/checkpoints/latentsync"
+CIVITAI_GGUF="$NETWORK_VOLUME/ComfyUI/models/unet"
 LIVEPORTRAIT_DIR="$NETWORK_VOLUME/ComfyUI/models/liveportrait"
 INSIGHTFACE_DIR="$NETWORK_VOLUME/ComfyUI/models/antelopev2"
 ANIMATEDIFF_DIR="NETWORK_VOLUME/ComfyUI/models/animatediff_models"
@@ -461,10 +462,18 @@ fi
 if [ "${DOWNLOAD_WAN22:-}" = "true" ]; then
     download_model "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors" "$LORAS_DIR/t2v_lightx2v_high_noise_model.safetensors"
     download_model "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors" "$LORAS_DIR/t2v_lightx2v_low_noise_model.safetensors"
+    #
     download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors" "$LORAS_DIR/i2v_lightx2v_high_noise_model.safetensors"
     download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors" "$LORAS_DIR/i2v_lightx2v_low_noise_model.safetensors"
+    #
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors" "$LORAS_DIR/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors" "$LORAS_DIR/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
+    #
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors"
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors"
+    #
+    download_model "https://civitai.red/api/download/models/2609141?type=Model&format=SafeTensor&size=full&fp=fp16" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8H.safetensors"
+    download_model "https://civitai.red/api/download/models/2609148?type=Model&format=SafeTensor&size=full&fp=fp8" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8L.safetensors"
 fi
 
 # ==========================================
@@ -473,7 +482,7 @@ fi
 
 # Download text encoders
 echo "📥 Downloading text encoders..."
-download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/models_t5_umt5-xxl-enc-bf16.pth" "$TEXT_ENCODERS_DIR/models_t5_umt5-xxl-enc-bf16.pth"
+download_model "https://huggingface.co/zootkitty/nsfw_wan_umt5-xxl_bf16_fixed/resolve/main/nsfw_wan_umt5-xxl_bf16_fixed.safetensors" "$TEXT_ENCODERS_DIR/nsfw_wan_umt5-xxl_bf16_fixed.safetensors"
 
 download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors" "$TEXT_ENCODERS_DIR/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors"
 
