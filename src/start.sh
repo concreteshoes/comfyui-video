@@ -171,6 +171,52 @@ status_msg "Detected GPU: $DETECTED_GPU (Compute Capability: $CUDA_ARCH)"
 echo "================================================"
 
 # ---------------------------------------------------------
+# Flash Attention 2.8.3
+# ---------------------------------------------------------
+# Check if already installed (Crucial for persistent environments)
+if python -c "import flash_attn" &> /dev/null; then
+    status_msg "Flash Attention already installed. Skipping."
+else
+    # Only install if architecture supports it (Ampere+)
+    if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
+        status_msg "Supported architecture detected ($CUDA_ARCH). Installing Flash Attention..."
+
+        PYTHON_VER=$(python -c 'import sys; print(f"{sys.version_info.major}{sys.version_info.minor}")')
+        TORCH_VER=$(python -c 'import torch; print(".".join(torch.__version__.split("+")[0].split(".")[:2]))')
+        CUDA_VER="128"
+        FLASH_ATTENTION_VER="2.8.3"
+
+        FLASH_ATTN_WHEEL_URL="https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.5.4/flash_attn-${FLASH_ATTENTION_VER}+cu${CUDA_VER}torch${TORCH_VER}-cp${PYTHON_VER}-cp${PYTHON_VER}-linux_x86_64.whl"
+
+        if pip install "$FLASH_ATTN_WHEEL_URL" --no-build-isolation >> "$STARTUP_LOG" 2>&1; then
+            echo "FlashAttention installed via wheel" >> "$STARTUP_LOG"
+        else
+            echo "        -> Wheel install failed. Building from source in background..."
+            (
+                set -e
+                cd /tmp
+                rm -rf flash-attention
+                git clone --depth 1 https://github.com/Dao-AILab/flash-attention.git
+                cd flash-attention
+                export FLASH_ATTN_CUDA_ARCHS="$CUDA_ARCH"
+                export MAX_JOBS=$(nproc)
+                export NVCC_THREADS=2
+                pip install ninja packaging -q
+                python setup.py install
+                cd /tmp
+                rm -rf flash-attention
+            ) > "$NETWORK_VOLUME/logs/flash_attn_install.log" 2>&1 &
+
+            FLASH_ATTN_PID=$!
+            echo "$FLASH_ATTN_PID" > /tmp/flash_attn_pid
+            echo "        -> Background build started (PID: $FLASH_ATTN_PID)"
+        fi
+    else
+        status_msg "Unsupported architecture ($CUDA_ARCH). Skipping Flash Attention."
+    fi
+fi
+
+# ---------------------------------------------------------
 # Sage Attention 2.x
 # ---------------------------------------------------------
 if $PYTHON_BIN -c "import sageattention" &> /dev/null; then
