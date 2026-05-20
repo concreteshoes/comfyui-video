@@ -43,9 +43,8 @@ mkdir -p "$NETWORK_VOLUME/logs"
 STARTUP_LOG="$NETWORK_VOLUME/logs/startup.log"
 echo "--- Startup log $(date) ---" >> "$STARTUP_LOG"
 
-# Explicitly use the venv python to avoid "module not found" errors
-PYTHON_BIN="/opt/venv/bin/python3"
-export PATH="/opt/venv/bin:$PATH"
+# Explicitly set the python path
+PYTHON_BIN="/usr/bin/python3"
 
 # Keep-alive loop to prevent connection timeout and monitor DNS
 (
@@ -287,8 +286,7 @@ fi
 
 echo "📥 Setting up CivitAI Downloader..."
 if [ ! -f "/usr/local/bin/download_with_aria.py" ]; then
-    # Add dependencies to venv first
-    $PYTHON_BIN -m pip install requests tqdm
+    python3 -m pip install requests tqdm
 
     git clone "https://github.com/concreteshoes/CivitAI_Downloader.git" /tmp/CivitAI_Downloader || echo "Git clone failed"
     mv /tmp/CivitAI_Downloader/download_with_aria.py "/usr/local/bin/" || echo "Move failed"
@@ -930,7 +928,7 @@ echo $! > /tmp/comfyui.pid # Save PID for restart
 cat > /usr/local/bin/comfyui-restart << 'EOF'
 #!/bin/bash
 
-PYTHON_BIN="/opt/venv/bin/python3"
+PYTHON_BIN="/usr/bin/python3"
 COMFYUI_DIR="${NETWORK_VOLUME:-/workspace}/ComfyUI"
 LOG_FILE="${NETWORK_VOLUME:-/workspace}/comfyui_nohup.log"
 
