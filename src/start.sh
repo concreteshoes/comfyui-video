@@ -293,54 +293,55 @@ mkdir -p "$CUSTOM_NODES_DIR"
 if [ ! -d "$COMFYUI_DIR" ]; then
     status_msg "First Boot: Moving ComfyUI to Volume..."
     mv /ComfyUI "$COMFYUI_DIR"
+    echo "✨ Pristine image deployed to volume. Skipping sync update for faster first boot."
 else
     status_msg "Restart detected: Syncing latest Image changes to Volume..."
     # Using . ensures hidden files are included, and -T treats destination as a directory
     cp -ruvT /ComfyUI "$COMFYUI_DIR"
     rm -rf /ComfyUI
     echo "✅ Sync complete."
-fi
 
-# SMART SYNC: Update all existing nodes automatically
-echo "🔄 Checking for updates and new dependencies..."
-find "$CUSTOM_NODES_DIR" -maxdepth 1 -type d -not -path "$CUSTOM_NODES_DIR" | while read -r node_path; do
-    if [ -d "$node_path/.git" ]; then
-        node_name=$(basename "$node_path")
+    # 🔄 SMART SYNC: Only engage on persistent storage restarts
+    echo "🔄 Persistent storage detected. Checking for updates and new dependencies..."
+    find "$CUSTOM_NODES_DIR" -maxdepth 1 -type d -not -path "$CUSTOM_NODES_DIR" | while read -r node_path; do
+        if [ -d "$node_path/.git" ]; then
+            node_name=$(basename "$node_path")
 
-        # Check the 'mtime' (modified time) of requirements.txt before pulling
-        REQ_FILE="$node_path/requirements.txt"
-        BEFORE_MOD=0
-        [ -f "$REQ_FILE" ] && BEFORE_MOD=$(stat -c %Y "$REQ_FILE" 2> /dev/null || stat -f %m "$REQ_FILE" 2> /dev/null)
+            # Check the 'mtime' (modified time) of requirements.txt before pulling
+            REQ_FILE="$node_path/requirements.txt"
+            BEFORE_MOD=0
+            [ -f "$REQ_FILE" ] && BEFORE_MOD=$(stat -c %Y "$REQ_FILE" 2> /dev/null || stat -f %m "$REQ_FILE" 2> /dev/null)
 
-        # Perform the update
-        (cd "$node_path" && git pull --ff-only -q > /dev/null 2>&1)
+            # Perform the update
+            (cd "$node_path" && git pull --ff-only -q > /dev/null 2>&1)
 
-        # Check if requirements.txt exists and if it was updated
-        if [ -f "$REQ_FILE" ]; then
-            AFTER_MOD=$(stat -c %Y "$REQ_FILE" 2> /dev/null || stat -f %m "$REQ_FILE" 2> /dev/null)
+            # Check if requirements.txt exists and if it was updated
+            if [ -f "$REQ_FILE" ]; then
+                AFTER_MOD=$(stat -c %Y "$REQ_FILE" 2> /dev/null || stat -f %m "$REQ_FILE" 2> /dev/null)
 
-            if [ "$BEFORE_MOD" != "$AFTER_MOD" ]; then
-                echo "📦 New dependencies detected for $node_name. Harmonizing and installing..."
+                if [ "$BEFORE_MOD" != "$AFTER_MOD" ]; then
+                    echo "📦 New dependencies detected for $node_name. Harmonizing and installing..."
 
-                # 🛡️ RE-APPLY DOCKERFILE HARMONIZATION PATCHES
-                sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$REQ_FILE"
-                sed -i -E 's/bitsandbytes([>=<~= ]+[0-9.]+)?/bitsandbytes/g' "$REQ_FILE"
-                sed -i -E 's/protobuf([>=<~= ]+[0-9.]+)?/protobuf/g' "$REQ_FILE"
-                sed -i -E 's/^onnxruntime([>=<~= ]+[0-9.]+)?$/onnxruntime-gpu/g' "$REQ_FILE"
-                sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$REQ_FILE"
-                sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$REQ_FILE"
-                sed -i -E 's/^torchaudio([>=<~= ]+[0-9.]+)?$/# torchaudio already installed/g' "$REQ_FILE"
-                sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$REQ_FILE"
-                sed -i -E 's/^numba([>=<~= ]+[0-9.]+)?$/numba/g' "$REQ_FILE"
-                sed -i -E 's/^clip[-_]interrogator([>=<~= ]+[0-9.]+)?$/clip-interrogator/g' "$REQ_FILE"
+                    # 🛡️ RE-APPLY DOCKERFILE HARMONIZATION PATCHES
+                    sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$REQ_FILE"
+                    sed -i -E 's/bitsandbytes([>=<~= ]+[0-9.]+)?/bitsandbytes/g' "$REQ_FILE"
+                    sed -i -E 's/protobuf([>=<~= ]+[0-9.]+)?/protobuf/g' "$REQ_FILE"
+                    sed -i -E 's/^onnxruntime([>=<~= ]+[0-9.]+)?$/onnxruntime-gpu/g' "$REQ_FILE"
+                    sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$REQ_FILE"
+                    sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$REQ_FILE"
+                    sed -i -E 's/^torchaudio([>=<~= ]+[0-9.]+)?$/# torchaudio already installed/g' "$REQ_FILE"
+                    sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$REQ_FILE"
+                    sed -i -E 's/^numba([>=<~= ]+[0-9.]+)?$/numba/g' "$REQ_FILE"
+                    sed -i -E 's/^clip[-_]interrogator([>=<~= ]+[0-9.]+)?$/clip-interrogator/g' "$REQ_FILE"
 
-                # Use --no-cache-dir to save space on your volume
-                $PYTHON_BIN -m pip install --no-cache-dir -r "$REQ_FILE" > /dev/null 2>&1
+                    # Use --no-cache-dir to save space on your volume
+                    $PYTHON_BIN -m pip install --no-cache-dir -r "$REQ_FILE" > /dev/null 2>&1
+                fi
             fi
         fi
-    fi
-done
-echo "✅ All nodes updated and dependencies verified."
+    done
+    echo "✅ All persistent nodes updated and dependencies verified."
+fi
 
 # Acquiring CivitAI Downloader and required models
 echo "📥 Setting up CivitAI Downloader..."
