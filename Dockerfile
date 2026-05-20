@@ -4,23 +4,22 @@ FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
 # Consolidated environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_PREFER_BINARY=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
     PYTHONUNBUFFERED=1 \
-    CMAKE_BUILD_PARALLEL_LEVEL=8 \
-    PATH="/opt/venv/bin:$PATH"
+    CMAKE_BUILD_PARALLEL_LEVEL=8
 
 # 1. System Dependencies & SSH Setup
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         python3 python3-venv python3-dev python3-pip \
-        curl unzip ffmpeg ninja-build git aria2 git-lfs wget vim rsync \
+        curl zip unzip ffmpeg ninja-build git aria2 git-lfs wget vim rsync \
         libgl1 libglib2.0-0 libgoogle-perftools4 build-essential libsm6 libxext6 libxrender1 \
         libusb-1.0-0 gcc openssh-server && \
     \
     # Setup Python 3.12 defaults
     ln -sf /usr/bin/python3 /usr/bin/python && \
     ln -sf /usr/bin/pip3 /usr/bin/pip && \
-    python3 -m venv /opt/venv && \
     \
     # Surgical SSH Config
     mkdir -p /root/.ssh /var/run/sshd && \
