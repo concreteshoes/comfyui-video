@@ -268,9 +268,26 @@ jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --ServerApp.allow_origin='*' --ServerApp.allow_credentials=True \
     --notebook-dir="$NETWORK_VOLUME" &
 
+# Define base paths
 COMFYUI_DIR="$NETWORK_VOLUME/ComfyUI"
 WORKFLOW_DIR="$NETWORK_VOLUME/ComfyUI/user/default/workflows"
-CUSTOM_NODES_DIR="$COMFYUI_DIR/custom_nodes"
+CUSTOM_NODES_DIR="$NETWORK_VOLUME/ComfyUI/custom_nodes"
+DIFFUSION_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/models/diffusion_models"
+TEXT_ENCODERS_DIR="$NETWORK_VOLUME/ComfyUI/models/text_encoders"
+CLIP_VISION_DIR="$NETWORK_VOLUME/ComfyUI/models/clip_vision"
+VAE_DIR="$NETWORK_VOLUME/ComfyUI/models/vae"
+LORAS_DIR="$NETWORK_VOLUME/ComfyUI/models/loras"
+DETECTION_DIR="$NETWORK_VOLUME/ComfyUI/models/detection"
+AUDIO_ENCODERS_DIR="$NETWORK_VOLUME/ComfyUI/models/audio_encoders"
+LATENTSYNC_DIR="$NETWORK_VOLUME/ComfyUI/models/checkpoints/latentsync"
+CIVITAI_GGUF="$NETWORK_VOLUME/ComfyUI/models/unet"
+LIVEPORTRAIT_DIR="$NETWORK_VOLUME/ComfyUI/models/liveportrait"
+INSIGHTFACE_DIR="$NETWORK_VOLUME/ComfyUI/models/antelopev2"
+ANIMATEDIFF_DIR="$NETWORK_VOLUME/ComfyUI/models/animatediff_models"
+MOTION_LORA_DIR="$NETWORK_VOLUME/ComfyUI/models/animatediff_motion_lora"
+IPADAPTER_DIR="$NETWORK_VOLUME/ComfyUI/models/ipadapter"
+JOYCAPTION_DIR="$NETWORK_VOLUME/ComfyUI/models/LLavacheckpoints/llama-joycaption-beta-one-hf-llava"
+FLORENCE2_DIR="$NETWORK_VOLUME/ComfyUI/models/florence2/base-PromptGen"
 mkdir -p "$CUSTOM_NODES_DIR"
 
 if [ ! -d "$COMFYUI_DIR" ]; then
@@ -282,18 +299,6 @@ else
     cp -ruvT /ComfyUI "$COMFYUI_DIR"
     rm -rf /ComfyUI
     echo "✅ Sync complete."
-fi
-
-echo "📥 Setting up CivitAI Downloader..."
-if [ ! -f "/usr/local/bin/download_with_aria.py" ]; then
-    $PYTHON_BIN -m pip install requests tqdm
-
-    git clone "https://github.com/concreteshoes/CivitAI_Downloader.git" /tmp/CivitAI_Downloader || echo "Git clone failed"
-    mv /tmp/CivitAI_Downloader/download_with_aria.py "/usr/local/bin/" || echo "Move failed"
-    chmod +x "/usr/local/bin/download_with_aria.py" || echo "Chmod failed"
-    rm -rf /tmp/CivitAI_Downloader
-else
-    echo "✅ CivitAI Downloader already exists."
 fi
 
 # SMART SYNC: Update all existing nodes automatically
@@ -315,7 +320,20 @@ find "$CUSTOM_NODES_DIR" -maxdepth 1 -type d -not -path "$CUSTOM_NODES_DIR" | wh
             AFTER_MOD=$(stat -c %Y "$REQ_FILE" 2> /dev/null || stat -f %m "$REQ_FILE" 2> /dev/null)
 
             if [ "$BEFORE_MOD" != "$AFTER_MOD" ]; then
-                echo "📦 New dependencies detected for $node_name. Installing..."
+                echo "📦 New dependencies detected for $node_name. Harmonizing and installing..."
+
+                # 🛡️ RE-APPLY DOCKERFILE HARMONIZATION PATCHES
+                sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$REQ_FILE"
+                sed -i -E 's/bitsandbytes([>=<~= ]+[0-9.]+)?/bitsandbytes/g' "$REQ_FILE"
+                sed -i -E 's/protobuf([>=<~= ]+[0-9.]+)?/protobuf/g' "$REQ_FILE"
+                sed -i -E 's/^onnxruntime([>=<~= ]+[0-9.]+)?$/onnxruntime-gpu/g' "$REQ_FILE"
+                sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$REQ_FILE"
+                sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$REQ_FILE"
+                sed -i -E 's/^torchaudio([>=<~= ]+[0-9.]+)?$/# torchaudio already installed/g' "$REQ_FILE"
+                sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$REQ_FILE"
+                sed -i -E 's/^numba([>=<~= ]+[0-9.]+)?$/numba/g' "$REQ_FILE"
+                sed -i -E 's/^clip[-_]interrogator([>=<~= ]+[0-9.]+)?$/clip-interrogator/g' "$REQ_FILE"
+
                 # Use --no-cache-dir to save space on your volume
                 $PYTHON_BIN -m pip install --no-cache-dir -r "$REQ_FILE" > /dev/null 2>&1
             fi
@@ -324,30 +342,19 @@ find "$CUSTOM_NODES_DIR" -maxdepth 1 -type d -not -path "$CUSTOM_NODES_DIR" | wh
 done
 echo "✅ All nodes updated and dependencies verified."
 
-# VERSION LOCKS: Pin specific nodes that break when updated
-if [ -d "$CUSTOM_NODES_DIR/ComfyUI-KJNodes" ]; then
-    echo "📌 Pinning KJNodes to stable commit 204f6d5..."
-    (cd "$CUSTOM_NODES_DIR/ComfyUI-KJNodes" && git reset --hard 204f6d5 > /dev/null 2>&1)
-fi
+# Acquiring CivitAI Downloader and required models
+echo "📥 Setting up CivitAI Downloader..."
+if [ ! -f "/usr/local/bin/download_with_aria.py" ]; then
+    $PYTHON_BIN -m pip install requests tqdm
 
-echo "🔧 Installing requirements for core Wan nodes in background..."
-if [ -f "$CUSTOM_NODES_DIR/ComfyUI-KJNodes/requirements.txt" ]; then
-    (
-        $PYTHON_BIN -m pip install --no-cache-dir \
-            -r "$CUSTOM_NODES_DIR/ComfyUI-KJNodes/requirements.txt"
-    ) &
-    WAN_REQS_PID=$!
+    git clone "https://github.com/concreteshoes/CivitAI_Downloader.git" /tmp/CivitAI_Downloader || echo "Git clone failed"
+    mv /tmp/CivitAI_Downloader/download_with_aria.py "/usr/local/bin/" || echo "Move failed"
+    chmod +x "/usr/local/bin/download_with_aria.py" || echo "Chmod failed"
+    rm -rf /tmp/CivitAI_Downloader
 else
-    echo "⚠️ KJNodes requirements not found, skipping background install."
-    WAN_REQS_PID=""
+    echo "✅ CivitAI Downloader already exists."
 fi
 
-export CHANGE_PREVIEW_METHOD="true"
-
-# Change to the directory
-cd "$CUSTOM_NODES_DIR" || exit 1
-
-# Function to download a model using huggingface-cli
 download_model() {
     local url="$1"
     local full_path="$2"
@@ -385,24 +392,6 @@ download_model() {
 
     echo "Download started in background for $destination_file"
 }
-
-# Define base paths
-DIFFUSION_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/models/diffusion_models"
-TEXT_ENCODERS_DIR="$NETWORK_VOLUME/ComfyUI/models/text_encoders"
-CLIP_VISION_DIR="$NETWORK_VOLUME/ComfyUI/models/clip_vision"
-VAE_DIR="$NETWORK_VOLUME/ComfyUI/models/vae"
-LORAS_DIR="$NETWORK_VOLUME/ComfyUI/models/loras"
-DETECTION_DIR="$NETWORK_VOLUME/ComfyUI/models/detection"
-AUDIO_ENCODERS_DIR="$NETWORK_VOLUME/ComfyUI/models/audio_encoders"
-LATENTSYNC_DIR="$NETWORK_VOLUME/ComfyUI/models/checkpoints/latentsync"
-CIVITAI_GGUF="$NETWORK_VOLUME/ComfyUI/models/unet"
-LIVEPORTRAIT_DIR="$NETWORK_VOLUME/ComfyUI/models/liveportrait"
-INSIGHTFACE_DIR="$NETWORK_VOLUME/ComfyUI/models/antelopev2"
-ANIMATEDIFF_DIR="NETWORK_VOLUME/ComfyUI/models/animatediff_models"
-MOTION_LORA_DIR="$NETWORK_VOLUME/ComfyUI/models/animatediff_motion_lora"
-IPADAPTER_DIR="$NETWORK_VOLUME/ComfyUI/models/ipadapter"
-JOYCAPTION_DIR="$NETWORK_VOLUME/ComfyUI/models/LLavacheckpoints/llama-joycaption-beta-one-hf-llava"
-FLORENCE2_DIR="$NETWORK_VOLUME/ComfyUI/models/florence2/base-PromptGen"
 
 # ==========================================
 # WAN 2.1
@@ -794,6 +783,9 @@ for dir in "$SOURCE_DIR"/*/; do
         mv "$dir" "$WORKFLOW_DIR/"
     fi
 done
+
+# UI Compatibility Mode
+export CHANGE_PREVIEW_METHOD="true"
 
 if [ "${CHANGE_PREVIEW_METHOD:-false}" = "true" ]; then
     echo "Updating default preview method..."
