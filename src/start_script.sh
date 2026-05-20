@@ -66,8 +66,9 @@ done
 
 echo "Network is up! Proceeding with clone..."
 
-# Clean up any previous failed attempts
+# Clean up any previous failed attempts safely inside /tmp
 rm -rf /tmp/comfyui-wan
+
 # Clone the repository to a temporary location with the specified branch
 echo "Cloning branch '$BRANCH' from repository..."
 git clone --branch "$BRANCH" https://github.com/concreteshoes/comfyui-wan.git /tmp/comfyui-wan
@@ -83,7 +84,18 @@ if [ $? -ne 0 ]; then
     fi
 fi
 
-# Move start.sh to root and execute it
-mv /tmp/comfyui-wan/src/start.sh /
-chmod +x /start.sh
-exec /start.sh
+# =====================================================================
+# ENVIRONMENT & RUNTIME ALIGNMENT FOR COMFYUI-WAN IMAGE
+# =====================================================================
+
+# 1. Activate the required Python Virtual Environment built into the image
+if [ -f "/opt/venv/bin/activate" ]; then
+    echo "Activating /opt/venv environment..."
+    source /opt/venv/bin/activate
+fi
+
+# 2. Keep the script inside /tmp to avoid root filesystem permission blocks
+chmod +x /tmp/comfyui-wan/src/start.sh
+
+# 3. Explicitly execute using bash so it inherits the active virtual environment paths
+exec /bin/bash /tmp/comfyui-wan/src/start.sh
