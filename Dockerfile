@@ -6,7 +6,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_PREFER_BINARY=1 \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     PYTHONUNBUFFERED=1 \
-    CMAKE_BUILD_PARALLEL_LEVEL=8
+    CMAKE_BUILD_PARALLEL_LEVEL=8 \
+    PIP_TIMEOUT=100
 
 # 1. System Dependencies & SSH Setup
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
