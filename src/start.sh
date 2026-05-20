@@ -286,7 +286,7 @@ fi
 
 echo "📥 Setting up CivitAI Downloader..."
 if [ ! -f "/usr/local/bin/download_with_aria.py" ]; then
-    python3 -m pip install requests tqdm
+    $PYTHON_BIN -m pip install requests tqdm
 
     git clone "https://github.com/concreteshoes/CivitAI_Downloader.git" /tmp/CivitAI_Downloader || echo "Git clone failed"
     mv /tmp/CivitAI_Downloader/download_with_aria.py "/usr/local/bin/" || echo "Move failed"
