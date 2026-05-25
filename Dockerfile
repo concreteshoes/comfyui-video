@@ -1,3 +1,8 @@
+# Copyright (C) 2026 <ByteSizeLife>
+# Licensed under AGPL-3.0 with additional terms — see LICENSE for details.
+# Commercial redistribution of this image or derivative works is prohibited
+# without explicit written permission from the author.
+
 # Use a single stage to ensure build-tools are available for custom node compilation
 FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
 
@@ -7,7 +12,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     PYTHONUNBUFFERED=1 \
     CMAKE_BUILD_PARALLEL_LEVEL=8 \
-    PIP_TIMEOUT=100
+    PIP_TIMEOUT=100 \
+    SAM2_BUILD_CUDA=0
 
 # 1. System Dependencies & SSH Setup
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -61,6 +67,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     scikit-learn \
     mediapipe \
     omegaconf \
+    facexlib \
     ftfy \
     addict \
     yapf \
@@ -71,11 +78,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     timm \
     imageio imageio-ffmpeg "moviepy<2.0" \
     onnxruntime-gpu \
-    insightface==0.7.3 \
+    insightface==1.0.1 \
     triton==3.5.1 \
     gguf \
     bitsandbytes \
-    protobuf
+    protobuf \
+    comfy-kitchen \
+    comfy-aimdo
 
 # TensorRT for CUDA 12.x (baked in since base image is CUDA 12.8.1)
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -94,14 +103,18 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         jupyter-server jupyter-server-terminals ipykernel jupyterlab_code_formatter \
         opencv-contrib-python-headless ultralytics segment-anything transparent-background
 
+# 6. Install Rclone & Filebrowser
 RUN curl -fsSL https://rclone.org/install.sh -o /tmp/rclone_install.sh && \
     bash /tmp/rclone_install.sh && \
-    rm /tmp/rclone_install.sh
+    rm /tmp/rclone_install.sh && \
+    \
+    # Install Filebrowser binary (The script auto-installs to /usr/local/bin/)
+    curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
 # Establishing workspace
 WORKDIR /workspace
 
-# 6. ComfyUI & Custom Nodes (with Directory Fix & CircleCI Heartbeat)
+# 7. ComfyUI & Custom Nodes (with Directory Fix & CircleCI Heartbeat)
 RUN --mount=type=cache,target=/root/.cache/pip \
     # Create workspace and install comfy with analytics disabled
     mkdir -p /ComfyUI/custom_nodes && \
@@ -113,7 +126,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git \
         https://github.com/kijai/ComfyUI-KJNodes.git \
         https://github.com/kijai/ComfyUI-LivePortraitKJ.git \
-        https://github.com/ShmuelRonen/ComfyUI_wav2lip.git \
         https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved.git \
         https://github.com/pamparamm/ComfyUI_IPAdapter_plus.git \
         https://github.com/huchukato/ComfyUI-RIFE-TensorRT-Auto.git \
@@ -122,50 +134,56 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         https://github.com/Well-Made/ComfyUI-Wan-SVI2Pro-FLF.git \
         https://github.com/huchukato/ComfyUI-HuggingFace.git \
         https://github.com/rgthree/rgthree-comfy.git \
-        https://github.com/JPS-GER/ComfyUI_JPS-Nodes.git \
-        https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes.git \
-        https://github.com/Jordach/comfy-plasma.git \
         https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git \
         https://github.com/bash-j/mikey_nodes.git \
         https://github.com/ltdrdata/ComfyUI-Impact-Pack.git \
         https://github.com/Fannovel16/comfyui_controlnet_aux.git \
         https://github.com/yolain/ComfyUI-Easy-Use.git \
-        https://github.com/kijai/ComfyUI-Florence2.git \
         https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper.git \
         https://github.com/ltdrdata/was-node-suite-comfyui.git \
         https://github.com/theUpsider/ComfyUI-Logic.git \
         https://github.com/cubiq/ComfyUI_essentials.git \
         https://github.com/chrisgoringe/cg-image-filter.git \
+        https://github.com/ltdrdata/ComfyUI-Impact-Subpack.git \
         https://github.com/chflame163/ComfyUI_LayerStyle.git \
         https://github.com/chrisgoringe/cg-use-everywhere.git \
         https://github.com/kijai/ComfyUI-segment-anything-2.git \
-        https://github.com/ClownsharkBatwing/RES4LYF \
+        https://github.com/ClownsharkBatwing/RES4LYF.git \
         https://github.com/welltop-cn/ComfyUI-TeaCache.git \
         https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git \
         https://github.com/Jonseed/ComfyUI-Detail-Daemon.git \
         https://github.com/kijai/ComfyUI-WanVideoWrapper.git \
-        https://github.com/wildminder/ComfyUI-VibeVoice.git \
         https://github.com/kijai/ComfyUI-WanAnimatePreprocess.git \
+        https://github.com/kijai/ComfyUI-SCAIL-Pose.git \
         https://github.com/obisin/ComfyUI-FSampler.git \
         https://github.com/cmeka/ComfyUI-WanMoEScheduler.git \
         https://github.com/lrzjason/ComfyUI-VAE-Utils.git \
         https://github.com/wallen0322/ComfyUI-Wan22FMLF.git \
         https://github.com/chflame163/ComfyUI_LayerStyle_Advance.git \
-        https://github.com/BadCafeCode/masquerade-nodes-comfyui.git \
         https://github.com/1038lab/ComfyUI-RMBG.git \
-        https://github.com/M1kep/ComfyLiterals.git; \
+        https://github.com/M1kep/ComfyLiterals.git \
+        https://github.com/kijai/ComfyUI-Florence2.git \
+        https://github.com/1038lab/ComfyUI-JoyCaption.git \
+        https://github.com/TenStrip/10S-Comfy-nodes.git \
+        https://github.com/Lightricks/ComfyUI-LTXVideo.git; \
     do \
-        repo_dir=$(basename "$repo" .git); \
-        echo "CIRCLECI_HEARTBEAT: Installing $repo_dir into $(pwd)..."; \
+        # Explicitly save baseline root path context
+        START_DIR=$(pwd); \
         \
-        # Clone with depth 1
+        # Isolated target file fetching 
         if [ "$repo" = "https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git" ]; then \
-            git clone --depth 1 --recursive "$repo"; \
+            git clone --depth 1 --recursive "$repo" tmp_clone_dir; \
         else \
-            git clone --depth 1 "$repo"; \
+            git clone --depth 1 "$repo" tmp_clone_dir; \
         fi; \
         \
-        # ComfyUI-Frame-Interpolation sed patch
+        # Dynamically read out real folder layout signature
+        cd tmp_clone_dir && repo_dir=$(basename "$(pwd)") && cd ..; \
+        mv tmp_clone_dir "$repo_dir"; \
+        \
+        echo "CIRCLECI_HEARTBEAT: Resolved folder [$repo_dir] for target engine install."; \
+        \
+        # ComfyUI-Frame-Interpolation specialized sed patch
         if [ "$repo_dir" = "ComfyUI-Frame-Interpolation" ]; then \
             if [ -f "$repo_dir/requirements-with-cupy.txt" ]; then \
                 echo "🛠️ Harmonizing ComfyUI-Frame-Interpolation cupy requirements..."; \
@@ -182,33 +200,23 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         if [ -f "$repo_dir/requirements.txt" ]; then \
             echo "🛠️ Harmonizing Dependencies for $repo_dir..."; \
             \
-            # 1. Harmonize OpenCV
             sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$repo_dir/requirements.txt"; \
-            \
-            # 2. Harmonize bitsandbytes (Strips versions like ==0.41.1 or >=0.35)
+            sed -i -E 's/^[Pp]illow([>=<~= ]+[0-9.]+)?$/# Pillow already installed/g' "$repo_dir/requirements.txt"; \
             sed -i -E 's/bitsandbytes([>=<~= ]+[0-9.]+)?/bitsandbytes/g' "$repo_dir/requirements.txt"; \
-            \
-            # 3. Harmonize protobuf
-            sed -i -E 's/protobuf([>=<~= ]+[0-9.]+)?/protobuf/g' "$repo_dir/requirements.txt"; \
-            \
-            # 4. Harmonize onnxruntime
-            sed -i -E 's/^onnxruntime([>=<~= ]+[0-9.]+)?$/onnxruntime-gpu/g' "$repo_dir/requirements.txt"; \
-            \
-            # 5. Strip torch stack (already installed with specific CUDA build)
+            sed -i -E 's/^protobuf[>=<~=,. 0-9]+$/protobuf/g' "$repo_dir/requirements.txt"; \
+            sed -i -E 's/^onnxruntime(-gpu)?([>=<~=,. 0-9]+)?$/onnxruntime-gpu/g' "$repo_dir/requirements.txt"; \
             sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$repo_dir/requirements.txt"; \
-            \
             sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$repo_dir/requirements.txt"; \
-            \
             sed -i -E 's/^torchaudio([>=<~= ]+[0-9.]+)?$/# torchaudio already installed/g' "$repo_dir/requirements.txt"; \
-            \
-            # 6. Strip numpy (already pinned to <2.0)
             sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$repo_dir/requirements.txt"; \
-            \
-            # 7. Strip numba version pin (managed globally to stay compatible with numpy)
             sed -i -E 's/^numba([>=<~= ]+[0-9.]+)?$/numba/g' "$repo_dir/requirements.txt"; \
-            \
-            # 8. Strip clip-interrogator
+            sed -i -E 's/^ninja([>=<~=~ ]+[0-9.]+)?$/ninja/g' "$repo_dir/requirements.txt"; \
             sed -i -E 's/^clip[-_]interrogator([>=<~= ]+[0-9.]+)?$/clip-interrogator/g' "$repo_dir/requirements.txt"; \
+            sed -i -E 's/^transformers(\[[a-zA-Z0-9_,]+\])?([>=<~= ]+[0-9.]+)?$/transformers/g' "$repo_dir/requirements.txt"; \
+            sed -i -E 's/^insightface([>=<~= ]+[0-9.]+)?$/insightface==1.0.1/g' "$repo_dir/requirements.txt"; \
+            sed -i -E 's/^diffusers([>=<~= ]+[0-9.]+)?$/# diffusers already installed/g' "$repo_dir/requirements.txt"; \
+            sed -i -E 's/^huggingface-hub([>=<~= ]+[0-9.]+)?$/# huggingface-hub already installed/g' "$repo_dir/requirements.txt"; \
+            sed -i -E 's/^(segment-anything|transparent-background)([>=<~= ]+[0-9.]+)?$/# segmentation tooling already installed/g' "$repo_dir/requirements.txt"; \
             \
             pip install --progress-bar off -v -r "$repo_dir/requirements.txt"; \
         fi; \
@@ -217,11 +225,19 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         if [ -f "$repo_dir/install.py" ]; then \
             python "$repo_dir/install.py"; \
         fi; \
+        \
+        # Absolute restoration of working directory parent node 
+        cd "$START_DIR"; \
     done
 
-# 7. Final Assets & Entrypoint
+# 8. Freeze and lock the completely populated environment safely here
+RUN python3 -m pip freeze > /etc/pip_constraints.txt
+ENV PIP_CONSTRAINT=/etc/pip_constraints.txt
+
+# 9. Final Assets & Entrypoint
 COPY src/start_script.sh /start_script.sh
 COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY Eyes.pt /Eyes.pt
 COPY 4xLSDIR.pth /4xLSDIR.pth
 
 RUN chmod +x /start_script.sh /docker-entrypoint.sh

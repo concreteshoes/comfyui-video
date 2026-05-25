@@ -67,16 +67,16 @@ done
 echo "Network is up! Proceeding with clone..."
 
 # Clean up any previous failed attempts safely inside /tmp
-rm -rf /tmp/comfyui-wan
+rm -rf /tmp/comfyui-video
 
 # Clone the repository to a temporary location with the specified branch
 echo "Cloning branch '$BRANCH' from repository..."
-git clone --branch "$BRANCH" https://github.com/concreteshoes/comfyui-wan.git /tmp/comfyui-wan
+git clone --branch "$BRANCH" https://github.com/concreteshoes/comfyui-video.git /tmp/comfyui-video
 
 # Check if clone was successful
 if [ $? -ne 0 ]; then
     echo "Error: Failed to clone branch '$BRANCH'. Falling back to main branch..."
-    git clone https://github.com/concreteshoes/comfyui-wan.git /tmp/comfyui-wan
+    git clone https://github.com/concreteshoes/comfyui-video.git /tmp/comfyui-video
 
     if [ $? -ne 0 ]; then
         echo "Error: Failed to clone repository. Exiting..."
@@ -85,6 +85,6 @@ if [ $? -ne 0 ]; then
 fi
 
 # Move start.sh to root and execute it
-mv /tmp/comfyui-wan/src/start.sh /
+mv /tmp/comfyui-video/src/start.sh /
 chmod +x /start.sh
 exec /start.sh

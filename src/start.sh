@@ -163,15 +163,18 @@ echo "$DETECTED_GPU" > /tmp/detected_gpu
 # ============================================================
 # Startup banner
 # ============================================================
+
 echo ""
 echo "================================================"
 echo "  Starting up..."
 status_msg "Detected GPU: $DETECTED_GPU (Compute Capability: $CUDA_ARCH)"
 echo "================================================"
 
-# ---------------------------------------------------------
-# Flash Attention 2.8.3
-# ---------------------------------------------------------
+# ============================================================
+# Flash Attention
+# ============================================================
+status_msg "[1/4] Checking Flash Attention"
+
 # Check if already installed (Crucial for persistent environments)
 if python -c "import flash_attn" &> /dev/null; then
     status_msg "Flash Attention already installed. Skipping."
@@ -201,7 +204,7 @@ else
                 export MAX_JOBS=$(nproc)
                 export NVCC_THREADS=2
                 pip install ninja packaging -q
-                python setup.py install
+                pip install . --no-build-isolation
                 cd /tmp
                 rm -rf flash-attention
             ) > "$NETWORK_VOLUME/logs/flash_attn_install.log" 2>&1 &
@@ -215,9 +218,11 @@ else
     fi
 fi
 
-# ---------------------------------------------------------
-# Sage Attention 2.x
-# ---------------------------------------------------------
+# ============================================================
+# Sage Attention (V2.x)
+# ============================================================
+status_msg "[2/4] Checking SageAttention"
+
 if $PYTHON_BIN -c "import sageattention" &> /dev/null; then
     status_msg "SageAttention already installed. Skipping build."
     SAGE_ATTENTION_AVAILABLE=true
@@ -239,34 +244,29 @@ fi
 # ============================================================
 # Setting up workspace
 # ============================================================
-# This is in case there's any special installs or overrides that needs to occur when starting the machine before starting ComfyUI
-if [ -f "$NETWORK_VOLUME/comfyui-wan/src/additional_params.sh" ]; then
-    chmod +x "$NETWORK_VOLUME/comfyui-wan/src/additional_params.sh"
-    echo "Executing additional_params.sh..."
-    "$NETWORK_VOLUME/comfyui-wan/src/additional_params.sh"
-else
-    echo "No additional_params.sh found. Skipping..."
-fi
-
-if ! which aria2 > /dev/null 2>&1; then
-    echo "Installing aria2..."
-    apt-get update && apt-get install -y aria2
-else
-    echo "aria2 is already installed"
-fi
-
-if ! which curl > /dev/null 2>&1; then
-    echo "Installing curl..."
-    apt-get update && apt-get install -y curl
-else
-    echo "curl is already installed"
-fi
+status_msg "[3/4] Setting up workspace..."
 
 echo "Starting JupyterLab in $NETWORK_VOLUME"
 jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --NotebookApp.token='' --NotebookApp.password='' \
     --ServerApp.allow_origin='*' --ServerApp.allow_credentials=True \
     --notebook-dir="$NETWORK_VOLUME" &
+
+# Ensure the database file path is clean
+FB_DB="$NETWORK_VOLUME/filebrowser.db"
+
+# 1. Initialize configuration only if it's a brand new volume
+if [ ! -f "$FB_DB" ]; then
+    echo "Creating a fresh Filebrowser database..."
+    filebrowser -d "$FB_DB" config init
+
+    # Hardcoded user to "admin", fallback password to "default_password" if env is missing
+    filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin
+fi
+
+# 2. Start Filebrowser in the background
+echo "Launching Filebrowser on port 8080..."
+filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$NETWORK_VOLUME/filebrowser.log" 2>&1 &
 
 # Define base paths
 COMFYUI_DIR="$NETWORK_VOLUME/ComfyUI"
@@ -276,70 +276,143 @@ DIFFUSION_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/models/diffusion_models"
 TEXT_ENCODERS_DIR="$NETWORK_VOLUME/ComfyUI/models/text_encoders"
 CLIP_VISION_DIR="$NETWORK_VOLUME/ComfyUI/models/clip_vision"
 VAE_DIR="$NETWORK_VOLUME/ComfyUI/models/vae"
+LATENT_UPSCALE_DIR="$NETWORK_VOLUME/ComfyUI/models/latent_upscale_models"
+UPSCALE_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/models/upscale_models"
 LORAS_DIR="$NETWORK_VOLUME/ComfyUI/models/loras"
+CHECKPOINTS_DIR="$NETWORK_VOLUME/ComfyUI/models/checkpoints"
+GGUF_DIR="$NETWORK_VOLUME/ComfyUI/models/unet"
 DETECTION_DIR="$NETWORK_VOLUME/ComfyUI/models/detection"
+NLF_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/models/nlf"
 AUDIO_ENCODERS_DIR="$NETWORK_VOLUME/ComfyUI/models/audio_encoders"
 LATENTSYNC_DIR="$NETWORK_VOLUME/ComfyUI/models/checkpoints/latentsync"
-CIVITAI_GGUF="$NETWORK_VOLUME/ComfyUI/models/unet"
 LIVEPORTRAIT_DIR="$NETWORK_VOLUME/ComfyUI/models/liveportrait"
-INSIGHTFACE_DIR="$NETWORK_VOLUME/ComfyUI/models/antelopev2"
+INSIGHTFACE_DIR="$NETWORK_VOLUME/ComfyUI/models/insightface/models"
+SAM2_DIR="$NETWORK_VOLUME/ComfyUI/models/sam2"
+RIFE_DIR="$NETWORK_VOLUME/ComfyUI/models/rife"
+FILM_DIR="$NETWORK_VOLUME/ComfyUI/models/film"
+ULTRALYTICS_DIR="$NETWORK_VOLUME/ComfyUI/models/ultralytics"
+ANTELOPEV2_DIR="$INSIGHTFACE_DIR/antelopev2"
+BUFFALO_L_DIR="$INSIGHTFACE_DIR/buffalo_l"
 ANIMATEDIFF_DIR="$NETWORK_VOLUME/ComfyUI/models/animatediff_models"
 MOTION_LORA_DIR="$NETWORK_VOLUME/ComfyUI/models/animatediff_motion_lora"
 IPADAPTER_DIR="$NETWORK_VOLUME/ComfyUI/models/ipadapter"
 JOYCAPTION_DIR="$NETWORK_VOLUME/ComfyUI/models/LLavacheckpoints/llama-joycaption-beta-one-hf-llava"
 FLORENCE2_DIR="$NETWORK_VOLUME/ComfyUI/models/florence2/base-PromptGen"
+MODEL_WHITELIST_DIR="$NETWORK_VOLUME/ComfyUI/user/default/ComfyUI-Impact-Subpack/model-whitelist.txt"
 mkdir -p "$CUSTOM_NODES_DIR"
 
-if [ ! -d "$COMFYUI_DIR" ]; then
+if [ ! -d "$COMFYUI_DIR" ] || [ -z "$(ls -A "$COMFYUI_DIR" 2> /dev/null)" ]; then
     status_msg "First Boot: Moving ComfyUI to Volume..."
-    mv /ComfyUI "$COMFYUI_DIR"
+    mkdir -p "$COMFYUI_DIR"
+    mv /ComfyUI/* "$COMFYUI_DIR"/ 2> /dev/null || true
     echo "✨ Pristine image deployed to volume. Skipping sync update for faster first boot."
 else
     status_msg "Restart detected: Syncing latest Image changes to Volume..."
-    # Using . ensures hidden files are included, and -T treats destination as a directory
+    # Force sync native core changes from your freshly built Docker image layers
     cp -ruvT /ComfyUI "$COMFYUI_DIR"
     rm -rf /ComfyUI
     echo "✅ Sync complete."
 
     # 🔄 SMART SYNC: Only engage on persistent storage restarts
     echo "🔄 Persistent storage detected. Checking for updates and new dependencies..."
-    find "$CUSTOM_NODES_DIR" -maxdepth 1 -type d -not -path "$CUSTOM_NODES_DIR" | while read -r node_path; do
+
+    # Track actions taken
+    updated_nodes=0
+    patched_dependencies=0
+
+    # Process Substitution avoids subshell isolation, keeping script execution native and safe
+    while read -r node_path; do
         if [ -d "$node_path/.git" ]; then
             node_name=$(basename "$node_path")
 
-            # Check the 'mtime' (modified time) of requirements.txt before pulling
+            # Check the 'mtime' of both requirement files before pulling
             REQ_FILE="$node_path/requirements.txt"
+            CUPY_FILE="$node_path/requirements-with-cupy.txt"
+
             BEFORE_MOD=0
+            CUPY_BEFORE=0
+
             [ -f "$REQ_FILE" ] && BEFORE_MOD=$(stat -c %Y "$REQ_FILE" 2> /dev/null || stat -f %m "$REQ_FILE" 2> /dev/null)
+            [ -f "$CUPY_FILE" ] && CUPY_BEFORE=$(stat -c %Y "$CUPY_FILE" 2> /dev/null || stat -f %m "$CUPY_FILE" 2> /dev/null)
 
-            # Perform the update
-            (cd "$node_path" && git pull --ff-only -q > /dev/null 2>&1)
+            # Perform a defensive clean pull to ensure headless operation doesn't halt on local conflicts
+            (
+                cd "$node_path" \
+                    && git reset --hard HEAD -q \
+                    && git pull --ff-only -q
+            ) > /dev/null 2>&1
 
-            # Check if requirements.txt exists and if it was updated
-            if [ -f "$REQ_FILE" ]; then
-                AFTER_MOD=$(stat -c %Y "$REQ_FILE" 2> /dev/null || stat -f %m "$REQ_FILE" 2> /dev/null)
+            # Check for changes in either file post-pull
+            AFTER_MOD=0
+            CUPY_AFTER=0
 
-                if [ "$BEFORE_MOD" != "$AFTER_MOD" ]; then
-                    echo "📦 New dependencies detected for $node_name. Harmonizing and installing..."
+            [ -f "$REQ_FILE" ] && AFTER_MOD=$(stat -c %Y "$REQ_FILE" 2> /dev/null || stat -f %m "$REQ_FILE" 2> /dev/null)
+            [ -f "$CUPY_FILE" ] && CUPY_AFTER=$(stat -c %Y "$CUPY_FILE" 2> /dev/null || stat -f %m "$CUPY_FILE" 2> /dev/null)
 
-                    # 🛡️ RE-APPLY DOCKERFILE HARMONIZATION PATCHES
+            if [ "$BEFORE_MOD" != "$AFTER_MOD" ] || [ "$CUPY_BEFORE" != "$CUPY_AFTER" ]; then
+                echo "📦 New dependencies detected for $node_name. Harmonizing and installing..."
+                ((patched_dependencies++))
+
+                # 🛡️ NODE-SPECIFIC PATCHES (ComfyUI-Frame-Interpolation)
+                if [ "$node_name" = "ComfyUI-Frame-Interpolation" ] && [ -f "$CUPY_FILE" ]; then
+                    echo "   🛠️ Applying node-specific patches for Frame-Interpolation cupy requirements..."
+                    sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$CUPY_FILE"
+                    sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$CUPY_FILE"
+                    sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$CUPY_FILE"
+                    sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$CUPY_FILE"
+                    sed -i -E 's/^[Pp]illow([>=<~= ]+[0-9.]+)?$/# Pillow already installed/g' "$CUPY_FILE"
+                    sed -i -E 's/^cupy-wheel$/cupy-cuda12x/g' "$CUPY_FILE"
+                fi
+
+                # 🛡️ GENERAL DOCKERFILE HARMONIZATION PATCHES
+                if [ -f "$REQ_FILE" ]; then
+                    sed -i -E 's/^[Pp]illow([>=<~= ]+[0-9.]+)?$/# Pillow already installed/g' "$REQ_FILE"
                     sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$REQ_FILE"
                     sed -i -E 's/bitsandbytes([>=<~= ]+[0-9.]+)?/bitsandbytes/g' "$REQ_FILE"
-                    sed -i -E 's/protobuf([>=<~= ]+[0-9.]+)?/protobuf/g' "$REQ_FILE"
-                    sed -i -E 's/^onnxruntime([>=<~= ]+[0-9.]+)?$/onnxruntime-gpu/g' "$REQ_FILE"
+                    sed -i -E 's/^protobuf[>=<~=,. 0-9]+$/protobuf/g' "$REQ_FILE"
+                    sed -i -E 's/^onnxruntime(-gpu)?([>=<~=,. 0-9]+)?$/onnxruntime-gpu/g' "$REQ_FILE"
                     sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$REQ_FILE"
                     sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$REQ_FILE"
                     sed -i -E 's/^torchaudio([>=<~= ]+[0-9.]+)?$/# torchaudio already installed/g' "$REQ_FILE"
                     sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$REQ_FILE"
                     sed -i -E 's/^numba([>=<~= ]+[0-9.]+)?$/numba/g' "$REQ_FILE"
+                    sed -i -E 's/^ninja([>=<~=~ ]+[0-9.]+)?$/ninja/g' "$REQ_FILE"
                     sed -i -E 's/^clip[-_]interrogator([>=<~= ]+[0-9.]+)?$/clip-interrogator/g' "$REQ_FILE"
+                    sed -i -E 's/^transformers(\[[a-zA-Z0-9_,]+\])?([>=<~= ]+[0-9.]+)?$/transformers/g' "$REQ_FILE"
+                    sed -i -E 's/^insightface([>=<~= ]+[0-9.]+)?$/insightface==1.0.1/g' "$REQ_FILE"
+                    sed -i -E 's/^diffusers([>=<~= ]+[0-9.]+)?$/# diffusers already installed/g' "$REQ_FILE"
+                    sed -i -E 's/^huggingface-hub([>=<~= ]+[0-9.]+)?$/# huggingface-hub already installed/g' "$REQ_FILE"
+                    sed -i -E 's/^(segment-anything|transparent-background)([>=<~= ]+[0-9.]+)?$/# segmentation tooling already installed/g' "$REQ_FILE"
+                fi
 
-                    # Use --no-cache-dir to save space on your volume
-                    $PYTHON_BIN -m pip install --no-cache-dir -r "$REQ_FILE" > /dev/null 2>&1
+                # Maintain a clean network disk footprint
+                INSTALL_SUCCESS=true
+
+                # Install standard requirements if they exist
+                if [ -f "$REQ_FILE" ]; then
+                    if ! $PYTHON_BIN -m pip install --no-cache-dir -r "$REQ_FILE" >> "$STARTUP_LOG" 2>&1; then
+                        INSTALL_SUCCESS=false
+                    fi
+                fi
+
+                # Ensure cupy requirements are installed if it's the Frame-Interpolation node
+                if [ "$node_name" = "ComfyUI-Frame-Interpolation" ] && [ -f "$CUPY_FILE" ]; then
+                    if ! $PYTHON_BIN -m pip install --no-cache-dir -r "$CUPY_FILE" >> "$STARTUP_LOG" 2>&1; then
+                        INSTALL_SUCCESS=false
+                    fi
+                fi
+
+                if [ "$INSTALL_SUCCESS" = true ]; then
+                    echo "   ✅ Dependencies installed for $node_name"
+                else
+                    echo "   ❌ Dependency install failed for $node_name — check $STARTUP_LOG"
                 fi
             fi
+            ((updated_nodes++))
         fi
-    done
+    done < <(find "$CUSTOM_NODES_DIR" -maxdepth 1 -type d -not -path "$CUSTOM_NODES_DIR")
+
+    echo "✅ Smart Updater processed $updated_nodes custom nodes ($patched_dependencies required env patching)."
     echo "✅ All persistent nodes updated and dependencies verified."
 fi
 
@@ -359,193 +432,208 @@ fi
 download_model() {
     local url="$1"
     local full_path="$2"
+    local skip_size_check="${3:-false}"
 
     local destination_dir=$(dirname "$full_path")
     local destination_file=$(basename "$full_path")
 
     mkdir -p "$destination_dir"
 
-    # Simple corruption check: file < 10MB or .aria2 files
-    if [ -f "$full_path" ]; then
+    if [ -f "${full_path}.aria2" ]; then
+        echo "⏳ Partial download state found for $destination_file. Resuming..."
+
+    elif [ -f "$full_path" ]; then
         local size_bytes=$(stat -f%z "$full_path" 2> /dev/null || stat -c%s "$full_path" 2> /dev/null || echo 0)
         local size_mb=$((size_bytes / 1024 / 1024))
 
-        if [ "$size_bytes" -lt 10485760 ]; then # Less than 10MB
-            echo "🗑️  Deleting corrupted file (${size_mb}MB < 10MB): $full_path"
+        if [ "$size_bytes" -lt 10485760 ] && [ "$skip_size_check" != "true" ]; then
+            echo "🗑️  Deleting corrupted placeholder file (${size_mb}MB < 10MB): $full_path"
             rm -f "$full_path"
         else
             echo "✅ $destination_file already exists (${size_mb}MB), skipping download."
+            LAST_DOWNLOAD_PID="" # ← clear it so caller knows no job was started
             return 0
         fi
     fi
 
-    # Check for and remove .aria2 control files
-    if [ -f "${full_path}.aria2" ]; then
-        echo "🗑️  Deleting .aria2 control file: ${full_path}.aria2"
-        rm -f "${full_path}.aria2"
-        rm -f "$full_path" # Also remove any partial file
-    fi
-
-    echo "📥 Downloading $destination_file to $destination_dir..."
-
-    # Download without falloc (since it's not supported in your environment)
-    aria2c -x 16 -s 16 -k 1M --continue=true --file-allocation=none -d "$destination_dir" -o "$destination_file" "$url" &
-
-    echo "Download started in background for $destination_file"
+    echo "📥 Background download scheduled for $destination_file..."
+    aria2c -x 8 -s 8 -k 4M \
+        --continue=true \
+        --file-allocation=none \
+        --max-tries=5 \
+        --retry-wait=3 \
+        --timeout=60 \
+        --connect-timeout=10 \
+        --console-log-level=error \
+        -d "$destination_dir" \
+        -o "$destination_file" \
+        "$url" &
+    LAST_DOWNLOAD_PID=$! # ← capture before anything else can overwrite $!
 }
 
-# ==========================================
-# WAN 2.1
-# ==========================================
-# Download 480p native models
-if [ "${DOWNLOAD_480P_NATIVE_MODELS:-}" = "true" ]; then
-    echo "📥 Downloading 480p native models..."
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_i2v_480p_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.1_i2v_480p_14B_bf16.safetensors"
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.1_t2v_14B_bf16.safetensors"
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.1_t2v_1.3B_bf16.safetensors"
+# ============================================================
+# LTX 2.3 ARCHITECTURE
+# ============================================================
+
+if [ "${DOWNLOAD_LTX23:-}" = "true" ]; then
+    echo "📥 Downloading LTX 2.3 (BF16) ..."
+    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/diffusion_models/ltx-2.3-22b-dev_transformer_only_bf16.safetensors" "$DIFFUSION_MODELS_DIR/ltx-2.3-22b-dev_transformer_only_bf16.safetensors"
 fi
 
-# Handle full download (with SDXL)
-if [ "${DOWNLOAD_WAN_FUN_AND_SDXL_HELPER:-}" = "true" ]; then
-    echo "📥 Downloading Wan Fun 14B model..."
-
-    download_model "https://huggingface.co/alibaba-pai/Wan2.1-Fun-14B-Control/resolve/main/diffusion_pytorch_model.safetensors" "$DIFFUSION_MODELS_DIR/diffusion_pytorch_model.safetensors"
-
-    UNION_DIR="$NETWORK_VOLUME/ComfyUI/models/controlnet/SDXL/controlnet-union-sdxl-1.0"
-    mkdir -p "$UNION_DIR"
-    if [ ! -f "$UNION_DIR/diffusion_pytorch_model_promax.safetensors" ]; then
-        download_model "https://huggingface.co/xinsir/controlnet-union-sdxl-1.0/resolve/main/diffusion_pytorch_model_promax.safetensors" "$UNION_DIR/diffusion_pytorch_model_promax.safetensors"
-    fi
+if [ "${DOWNLOAD_LTX23_GGUF:-}" = "true" ]; then
+    echo "📥 Downloading LTX 2.3 GGUF (Q8)..."
+    download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/ltx-2.3-22b-dev-Q8_0.gguf" "$GGUF_DIR/ltx-2.3-22b-dev-Q8_0.gguf"
 fi
 
-if [ "${DOWNLOAD_VACE:-}" = "true" ]; then
-    echo "📥 Downloading VACE 14B Model"
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-VACE_module_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_1-VACE_module_14B_bf16.safetensors"
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1-VACE_module_1_3B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_1-VACE_module_1_3B_bf16.safetensors"
+if [ "${DOWNLOAD_LTX23:-}" = "true" ] || [ "${DOWNLOAD_LTX23_GGUF:-}" = "true" ]; then
+    echo "📥 Downloading shared LTX 2.3 dependency ecosystem..."
+
+    # Download text encoder
+    download_model "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it.safetensors" "$TEXT_ENCODERS_DIR/gemma_3_12B_it.safetensors"
+    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/text_encoders/ltx-2.3_text_projection_bf16.safetensors" "$TEXT_ENCODERS_DIR/ltx-2.3_text_projection_bf16.safetensors"
+
+    # Download VAE
+    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/LTX23_video_vae_bf16.safetensors" "$VAE_DIR/LTX23_video_vae_bf16.safetensors"
+    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/LTX23_audio_vae_bf16.safetensors" "$VAE_DIR/LTX23_audio_vae_bf16.safetensors"
+    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/taeltx2_3.safetensors" "$VAE_DIR/taeltx2_3.safetensors"
+
+    # Download distilled loras
+    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/loras/ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors" "$LORAS_DIR/ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors"
+
+    # Download RL loras
+    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/loras/LTX-2.3-OmniNFT-RL-Lora_bf16.safetensors" "$LORAS_DIR/LTX-2.3-OmniNFT-RL-Lora_bf16.safetensors"
+
+    # Download LTX-2.3 latent upscalers
+    download_model "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors" "$LATENT_UPSCALE_DIR/ltx-2.3-spatial-upscaler-x1.5-1.0.safetensors"
+    download_model "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-spatial-upscaler-x2-1.1.safetensors" "$LATENT_UPSCALE_DIR/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
+    download_model "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-temporal-upscaler-x2-1.0.safetensors" "$LATENT_UPSCALE_DIR/ltx-2.3-temporal-upscaler-x2-1.0.safetensors"
+
+    echo "📋 LTX 2.3 pipeline queued for background download"
 fi
 
-# Download 720p native models
-if [ "${DOWNLOAD_720P_NATIVE_MODELS:-}" = "true" ]; then
-    echo "📥 Downloading 720p native models..."
+# ============================================================
+# WAN 2.2 DiT
+# ============================================================
 
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_i2v_720p_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.1_i2v_720p_14B_bf16.safetensors"
-
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.1_t2v_14B_bf16.safetensors"
-
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.1_t2v_1.3B_bf16.safetensors"
-fi
-
-# Download Steady Dancer model
-if [ "${DOWNLOAD_STEADY_DANCER:-}" = "true" ]; then
-    echo "📥 Downloading Steady Dancer..."
-
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/SteadyDancer/Wan21_I2V_SteadyDancer_fp16.safetensors" "$DIFFUSION_MODELS_DIR/Wan21_I2V_SteadyDancer_fp16.safetensors"
-fi
-
-if [ "${DOWNLOAD_INFINITETALK:-true}" = "true" ]; then
-    echo "📥 Downloading InfiniteTalk..."
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_1-InfiniTetalk-Single_fp16.safetensors"
-fi
-
-# ==========================================
-# WAN 2.2
-# ==========================================
-# Download Wan 2.2 model by default
-if [ "${DOWNLOAD_WAN22:-true}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2"
-
+if [ "${DOWNLOAD_WAN22:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 Base Models (T2V & I2V)..."
     download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan-2.2-T2V-High-Noise-BF16.safetensors" "$DIFFUSION_MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
-
     download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan-2.2-T2V-Low-Noise-BF16.safetensors" "$DIFFUSION_MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
-
     download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan-2.2-I2V-High-Noise-BF16.safetensors" "$DIFFUSION_MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"
-
     download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan-2.2-I2V-Low-Noise-BF16.safetensors" "$DIFFUSION_MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
 fi
 
-# Download Wan Animate model by default
-if [ "${DOWNLOAD_WAN_ANIMATE:-true}" = "true" ]; then
-    echo "📥 Downloading Wan Animate model..."
+# ============================================================
+# WAN 2.2 ANIMATE & POSE ECOSYSTEM (SteadyDancer Replacements)
+# ============================================================
 
+if [ "${DOWNLOAD_WAN_ANIMATE:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 Animate Model & Infrastructure..."
     download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_animate_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.2_animate_14B_bf16.safetensors"
+    download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_animate_14B_relight_lora_bf16.safetensors" "$LORAS_DIR/wan2.2_animate_14B_relight_lora_bf16.safetensors"
 
-    # Download detection models for WanAnimatePreprocess
-    echo "Downloading detection models..."
+    # Tracking Detection matrices for ComfyUI-WanAnimatePreprocess & SCAIL
+    echo "📥 Fetching Wan Animate Pose & Object Detection models..."
     download_model "https://huggingface.co/Wan-AI/Wan2.2-Animate-14B/resolve/main/process_checkpoint/det/yolov10m.onnx" "$DETECTION_DIR/yolov10m.onnx"
     download_model "https://huggingface.co/Kijai/vitpose_comfy/resolve/main/onnx/vitpose_h_wholebody_data.bin" "$DETECTION_DIR/vitpose_h_wholebody_data.bin"
     download_model "https://huggingface.co/Kijai/vitpose_comfy/resolve/main/onnx/vitpose_h_wholebody_model.onnx" "$DETECTION_DIR/vitpose_h_wholebody_model.onnx"
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_animate_14B_relight_lora_bf16.safetensors" "$LORAS_DIR/wan2.2_animate_14B_relight_lora_bf16.safetensors"
+
+    # SCAIL-Pose Core Infrastructure Setup
+    echo "📥 Fetching SCAIL NLF Multi-Alignment Model..."
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/SCAIL/nlf_l_multi_0.3.2_fp16.safetensors" "$NLF_MODELS_DIR/nlf_l_multi_0.3.2_fp16.safetensors"
 fi
 
-if [ "${DOWNLOAD_WAN_S2V:-true}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 S2V models..."
+# ============================================================
+# WAN 2.2 SPEECH-TO-VIDEO
+# ============================================================
+
+if [ "${DOWNLOAD_WAN_S2V:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 S2V Lip-Sync Layers..."
     download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_s2v_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.2_s2v_14B_bf16.safetensors"
     download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors" "$AUDIO_ENCODERS_DIR/wav2vec2_large_english_fp16.safetensors"
 fi
 
-# ==========================================
-# OPTIMIZATION LORAS
-# ==========================================
-echo "📥 Downloading optimization loras"
-if [ "${DOWNLOAD_720P_NATIVE_MODELS:-}" = "true" ] || [ "${DOWNLOAD_480P_NATIVE_MODELS:-}" = "true" ]; then
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan21_CausVid_14B_T2V_lora_rank32.safetensors" "$LORAS_DIR/Wan21_CausVid_14B_T2V_lora_rank32.safetensors"
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors" "$LORAS_DIR/Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors"
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors" "$LORAS_DIR/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors"
+# ============================================================
+# WAN 2.2 STRUCTURE & MOTION CONTROL (SteadyDancer Replacements)
+# ============================================================
+
+# 1. Wan 2.2 Fun Control Engine (Native Multi-Modal Pose/Depth/Canny Base)
+if [ "${DOWNLOAD_WAN_FUN_CONTROL:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 Fun Control Base Models (BF16)..."
+
+    # Official Alibaba PAI Wan 2.2 Fun base checkpoints split for ComfyUI Native/Kijai wrappers
+    download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_control_high_noise_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.2_fun_control_high_noise_14B_bf16.safetensors"
+    download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_control_low_noise_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.2_fun_control_low_noise_14B_bf16.safetensors"
 fi
 
+# 2. Dedicated Wan 2.2 ControlNet Adapters
+if [ "${DOWNLOAD_WAN_CONTROLNETS:-}" = "true" ]; then
+    echo "📥 Downloading Dedicated Wan 2.2 ControlNet Adapters..."
+
+    # TheDenk Verified Wan 2.2 14B Depth ControlNet
+    download_model "https://huggingface.co/TheDenk/wan2.2-t2v-a14b-controlnet-depth-v1/resolve/main/diffusion_pytorch_model.safetensors" "$CONTROLNET_DIR/wan2.2_t2v_a14b_controlnet_depth_v1.safetensors"
+
+    # TheDenk Verified Wan 2.2 14B HED/Edge ControlNet (Optional but highly recommended for posture layout)
+    download_model "https://huggingface.co/TheDenk/wan2.2-t2v-a14b-controlnet-hed-v1/resolve/main/diffusion_pytorch_model.safetensors" "$CONTROLNET_DIR/wan2.2_t2v_a14b_controlnet_hed_v1.safetensors"
+fi
+
+# ============================================================
+# WAN 2.2 PERFORMANCE ENGINE & LORAS
+# ============================================================
+
 if [ "${DOWNLOAD_WAN22:-}" = "true" ]; then
+    echo "📥 Injecting Wan 2.2 Lightning & SVI Math Optimizations..."
+
+    # 4-Step Lightning Matrix T2V
     download_model "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors" "$LORAS_DIR/t2v_lightx2v_high_noise_model.safetensors"
     download_model "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors" "$LORAS_DIR/t2v_lightx2v_low_noise_model.safetensors"
-    #
+
+    # 4-Step Lightning Matrix I2V (Lightx2v variant)
     download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors" "$LORAS_DIR/i2v_lightx2v_high_noise_model.safetensors"
     download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors" "$LORAS_DIR/i2v_lightx2v_low_noise_model.safetensors"
-    #
+
+    # Alternative I2V Step-Distill Models (Kijai Comfy Variant)
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors" "$LORAS_DIR/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors" "$LORAS_DIR/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
-    #
+
+    # Stable Video Infinity v2 PRO Modules
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors"
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors"
-    #
+
+    # CivitAI Community Enhanced Models
     download_model "https://civitai.red/api/download/models/2609141?type=Model&format=SafeTensor&size=full&fp=fp16" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8H.safetensors"
     download_model "https://civitai.red/api/download/models/2609148?type=Model&format=SafeTensor&size=full&fp=fp8" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8L.safetensors"
 fi
 
-# ==========================================
-# TEXT ENCODERS
-# ==========================================
+# ============================================================
+# WAN 2.2 TEXT ENCODERS VAE & GLUE ASSETS
+# ============================================================
 
-# Download text encoders
-echo "📥 Downloading text encoders..."
-download_model "https://huggingface.co/zootkitty/nsfw_wan_umt5-xxl_bf16_fixed/resolve/main/nsfw_wan_umt5-xxl_bf16_fixed.safetensors" "$TEXT_ENCODERS_DIR/nsfw_wan_umt5-xxl_bf16_fixed.safetensors"
-
-download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors" "$TEXT_ENCODERS_DIR/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors"
-
-download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors" "$CLIP_VISION_DIR/clip_vision_h.safetensors"
-
-# ==========================================
-# VAE
-# ==========================================
-
-# Download VAE
-if [ "${DOWNLOAD_VACE:-}" = "true" ] || [ "${DOWNLOAD_720P_NATIVE_MODELS:-}" = "true" ] || [ "${DOWNLOAD_480P_NATIVE_MODELS:-}" = "true" ] || [ "${DOWNLOAD_WAN_S2V:-true}" = "true" ]; then
-    echo "📥 Downloading VAE..."
+if [ "${DOWNLOAD_WAN22:-}" = "true" ] || [ "${DOWNLOAD_WAN_ANIMATE:-}" = "true" ] || [ "${DOWNLOAD_WAN_S2V:-}" = "true" ]; then
+    echo "📥 Downloading Wan VAE, Text Encoders and Clip Vision Arrays..."
+    download_model "https://huggingface.co/zootkitty/nsfw_wan_umt5-xxl_bf16_fixed/resolve/main/nsfw_wan_umt5-xxl_bf16_fixed.safetensors" "$TEXT_ENCODERS_DIR/nsfw_wan_umt5-xxl_bf16_fixed.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors" "$TEXT_ENCODERS_DIR/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors"
+    download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors" "$CLIP_VISION_DIR/clip_vision_h.safetensors"
     download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan2_1_VAE_bf16.safetensors" "$VAE_DIR/Wan2_1_VAE_bf16.safetensors"
+
+    echo "✅ WAN 2.2 infrastructure verification complete"
 fi
 
 # ==========================================
 # JOYCAPTION BETA ONE
 # ==========================================
+
 if [ "${DOWNLOAD_JOYCAPTION:-}" = "true" ]; then
     echo "📥 Downloading JoyCaption Beta One..."
 
     # 1. Config & Tokenizer Files
-    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/config.json" "$JOYCAPTION_DIR/config.json"
-    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/generation_config.json" "$JOYCAPTION_DIR/generation_config.json"
-    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/model.safetensors.index.json" "$JOYCAPTION_DIR/model.safetensors.index.json"
-    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/preprocessor_config.json" "$JOYCAPTION_DIR/preprocessor_config.json"
-    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/special_tokens_map.json" "$JOYCAPTION_DIR/special_tokens_map.json"
-    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/tokenizer.json" "$JOYCAPTION_DIR/tokenizer.json"
-    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/tokenizer_config.json" "$JOYCAPTION_DIR/tokenizer_config.json"
+    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/config.json" "$JOYCAPTION_DIR/config.json" true
+    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/generation_config.json" "$JOYCAPTION_DIR/generation_config.json" true
+    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/model.safetensors.index.json" "$JOYCAPTION_DIR/model.safetensors.index.json" true
+    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/preprocessor_config.json" "$JOYCAPTION_DIR/preprocessor_config.json" true
+    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/special_tokens_map.json" "$JOYCAPTION_DIR/special_tokens_map.json" true
+    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/tokenizer.json" "$JOYCAPTION_DIR/tokenizer.json" true
+    download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/tokenizer_config.json" "$JOYCAPTION_DIR/tokenizer_config.json" true
 
     # 2. Sharded Weights
     download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/model-00001-of-00004.safetensors" "$JOYCAPTION_DIR/model-00001-of-00004.safetensors"
@@ -559,6 +647,7 @@ fi
 # ==========================================
 # FLORENCE-2 NSFW V2
 # ==========================================
+
 if [ "${DOWNLOAD_FLORENCE2:-}" = "true" ]; then
     echo "📥 Downloading Florence-2 NSFW finetune..."
 
@@ -566,27 +655,27 @@ if [ "${DOWNLOAD_FLORENCE2:-}" = "true" ]; then
     NSFW_BASE_URL="https://huggingface.co/ljnlonoljpiljm/florence-2-base-nsfw-v2/resolve/main"
 
     # 1. Core Configuration & Tokenizer
-    download_model "$NSFW_BASE_URL/config.json" "$FLORENCE2_DIR/config.json"
-    download_model "$NSFW_BASE_URL/generation_config.json" "$FLORENCE2_DIR/generation_config.json"
-    download_model "$NSFW_BASE_URL/preprocessor_config.json" "$FLORENCE2_DIR/preprocessor_config.json"
-    download_model "$NSFW_BASE_URL/added_tokens.json" "$FLORENCE2_DIR/added_tokens.json"
-    download_model "$NSFW_BASE_URL/merges.txt" "$FLORENCE2_DIR/merges.txt"
-    download_model "$NSFW_BASE_URL/special_tokens_map.json" "$FLORENCE2_DIR/special_tokens_map.json"
-    download_model "$NSFW_BASE_URL/tokenizer.json" "$FLORENCE2_DIR/tokenizer.json"
-    download_model "$NSFW_BASE_URL/tokenizer_config.json" "$FLORENCE2_DIR/tokenizer_config.json"
-    download_model "$NSFW_BASE_URL/vocab.json" "$FLORENCE2_DIR/vocab.json"
+    download_model "$NSFW_BASE_URL/config.json" "$FLORENCE2_DIR/config.json" true
+    download_model "$NSFW_BASE_URL/generation_config.json" "$FLORENCE2_DIR/generation_config.json" true
+    download_model "$NSFW_BASE_URL/preprocessor_config.json" "$FLORENCE2_DIR/preprocessor_config.json" true
+    download_model "$NSFW_BASE_URL/added_tokens.json" "$FLORENCE2_DIR/added_tokens.json" true
+    download_model "$NSFW_BASE_URL/merges.txt" "$FLORENCE2_DIR/merges.txt" true
+    download_model "$NSFW_BASE_URL/special_tokens_map.json" "$FLORENCE2_DIR/special_tokens_map.json" true
+    download_model "$NSFW_BASE_URL/tokenizer.json" "$FLORENCE2_DIR/tokenizer.json" true
+    download_model "$NSFW_BASE_URL/tokenizer_config.json" "$FLORENCE2_DIR/tokenizer_config.json" true
+    download_model "$NSFW_BASE_URL/vocab.json" "$FLORENCE2_DIR/vocab.json" true
 
     # 2. The Weights
     download_model "$NSFW_BASE_URL/model.safetensors" "$FLORENCE2_DIR/model.safetensors"
 
     # 3. Microsoft Processor (Handles the actual image bounding boxes/cropping)
-    download_model "https://huggingface.co/microsoft/Florence-2-base/resolve/main/processing_florence2.py" "$FLORENCE2_DIR/processing_florence2.py"
+    download_model "https://huggingface.co/microsoft/Florence-2-base/resolve/main/processing_florence2.py" "$FLORENCE2_DIR/processing_florence2.py" true
 
     # 4. APPLY THE KIJAI / LAYERSTYLE PATCH
     # We copy the patched modeling and config files directly from the custom node directory
     # to overwrite any missing or outdated files, ensuring transformers >= 4.45 compatibility.
     echo "🔧 Applying Transformers compatibility patch for Florence-2..."
-    LAYERSTYLE_MODELS_DIR="/ComfyUI/custom_nodes/ComfyUI_LayerStyle_Advance/florence2_models"
+    LAYERSTYLE_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/custom_nodes/ComfyUI_LayerStyle_Advance/florence2_models"
 
     if [ -d "$LAYERSTYLE_MODELS_DIR" ]; then
         cp "$LAYERSTYLE_MODELS_DIR/modeling_florence2.py" "$FLORENCE2_DIR/"
@@ -602,6 +691,7 @@ fi
 # ==========================================
 # LATENTSYNC
 # ==========================================
+
 echo "📥 Downloading LipSync weights..."
 # Main LatentSync v1.6 Core Models
 download_model "https://huggingface.co/ByteDance/LatentSync-1.6/resolve/main/latentsync_unet.pt" "$LATENTSYNC_DIR/latentsync_unet.pt"
@@ -617,24 +707,13 @@ download_model "https://huggingface.co/ByteDance/LatentSync/resolve/main/auxilia
 download_model "https://huggingface.co/ByteDance/LatentSync/resolve/main/auxiliary/vgg16-397923af.pth" "$LATENTSYNC_DIR/auxiliary/vgg16-397923af.pth"
 
 # VAE (Standard SD1.5 VAE required by LatentSync)
-download_model "https://huggingface.co/ByteDance/LatentSync/resolve/main/vae/config.json" "$LATENTSYNC_DIR/vae/config.json"
+download_model "https://huggingface.co/ByteDance/LatentSync/resolve/main/vae/config.json" "$LATENTSYNC_DIR/vae/config.json" true
 download_model "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors" "$LATENTSYNC_DIR/vae/diffusion_pytorch_model.safetensors"
-
-# ==========================================
-# INSIGHTFACE
-# ==========================================
-echo "📥 Downloading InsightFace weights..."
-# Download the AntelopeV2 model pack (standard for high-quality detection)
-# These are the 5 core files needed for InsightFace to 'see' the face
-download_model "https://huggingface.co/comfyanonymous/models/resolve/main/insightface/models/antelopev2/1080_720.onnx" "$INSIGHTFACE_DIR/1080_720.onnx"
-download_model "https://huggingface.co/comfyanonymous/models/resolve/main/insightface/models/antelopev2/2d106det.onnx" "$INSIGHTFACE_DIR/2d106det.onnx"
-download_model "https://huggingface.co/comfyanonymous/models/resolve/main/insightface/models/antelopev2/3d68tk7.onnx" "$INSIGHTFACE_DIR/3d68tk7.onnx"
-download_model "https://huggingface.co/comfyanonymous/models/resolve/main/insightface/models/antelopev2/genderage.onnx" "$INSIGHTFACE_DIR/genderage.onnx"
-download_model "https://huggingface.co/comfyanonymous/models/resolve/main/insightface/models/antelopev2/scrfd_10g_bnkps.onnx" "$INSIGHTFACE_DIR/scrfd_10g_bnkps.onnx"
 
 # ==========================================
 # LIVEPORTRAIT
 # ==========================================
+
 echo "📥 Downloading LivePortrait weights..."
 # Main Safetensors (Optimized for ComfyUI)
 download_model "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/main/appearance_feature_extractor.safetensors" "$LIVEPORTRAIT_DIR/appearance_feature_extractor.safetensors"
@@ -648,17 +727,10 @@ download_model "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/ma
 # It is safest to put it in both or use the root as defined below:
 download_model "https://huggingface.co/Kijai/LivePortrait_safetensors/resolve/main/landmark.safetensors" "$LIVEPORTRAIT_DIR/landmark.safetensors"
 
-# Many of Kijai's 'Expression' nodes prefer Buffalo_L over AntelopeV2
-mkdir -p "$NETWORK_VOLUME/ComfyUI/models/insightface/models/buffalo_l"
-download_model "https://huggingface.co/deepinsight/insightface/resolve/main/models/buffalo_l.zip" "$NETWORK_VOLUME/ComfyUI/models/insightface/models/buffalo_l.zip"
-unzip -o "$NETWORK_VOLUME/ComfyUI/models/insightface/models/buffalo_l.zip" -d "$INSIGHTFACE_MODELS_DIR"
-
-# Clean up the zip to save space on your network volume
-rm "$NETWORK_VOLUME/ComfyUI/models/insightface/models/buffalo_l.zip"
-
 # ==========================================
 # ANIMATEDIFF-EVOLVED
 # ==========================================
+
 echo "📥 Downloading AnimateDiff-Evolved weights..."
 # The Core SD1.5 Motion Modules
 # V3 (Best Quality)
@@ -681,8 +753,28 @@ download_model "https://huggingface.co/guoyww/animatediff/resolve/main/v2_lora_Z
 download_model "https://huggingface.co/guoyww/animatediff/resolve/main/v2_lora_ZoomOut.ckpt" "$MOTION_LORA_DIR/v2_lora_ZoomOut.ckpt"
 
 # ==========================================
+# SAM 2 & RIFE
+# ==========================================
+
+echo "📥 Downloading SAM 2 & RIFE weights..."
+download_model "https://huggingface.co/Kijai/sam2-safetensors/resolve/main/sam2.1_hiera_large-fp16.safetensors" "$SAM2_DIR/sam2.1_hiera_large-fp16.safetensors"
+download_model "https://huggingface.co/Kijai/sam2-safetensors/resolve/main/sam2.1_hiera_small-fp16.safetensors" "$SAM2_DIR/sam2.1_hiera_small-fp16.safetensors"
+download_model "https://huggingface.co/MachineDelusions/RIFE/resolve/main/rife49.pth" "$RIFE_DIR/rife49.pth"
+download_model "https://huggingface.co/MachineDelusions/RIFE/resolve/main/film_net_fp32.pt" "$FILM_DIR/film_net_fp32.pt"
+
+# ==========================================
+# IMPACT PACK
+# ==========================================
+
+echo "📥 Downloading detailers & post-processing utilities..."
+download_model "https://huggingface.co/Bingsu/adetailer/resolve/main/face_yolov11l.pt" "$ULTRALYTICS_DIR/bbox/face_yolov11l.pt"
+download_model "https://huggingface.co/Ultralytics/assets/resolve/main/yolo11l-seg.pt" "$ULTRALYTICS_DIR/segm/yolo11l-seg.pt"
+
+# ==========================================
 # IPADAPTER PLUS
 # ==========================================
+
+echo "📥 Downloading IP-Adapter weights..."
 # CLIP Vision (The Image Encoder)
 # This is the standard ViT-H model required by almost all IPAdapters
 download_model "https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors" "$CLIP_VISION_DIR/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"
@@ -694,62 +786,20 @@ download_model "https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-ada
 # SDXL Face Plus (Great for high-res base images before Wan I2V)
 download_model "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors" "$IPADAPTER_DIR/ip-adapter-plus-face_sdxl_vit-h.safetensors"
 
-# Keep checking until no aria2c processes are running
-if pgrep -x "aria2c" > /dev/null; then
-    echo "⏳ Waiting for downloads..."
-    while pgrep -x "aria2c" > /dev/null; do
-        sleep 5
-    done
-fi
-
-declare -A MODEL_CATEGORIES=(
-    ["$NETWORK_VOLUME/ComfyUI/models/checkpoints"]="$CHECKPOINT_IDS_TO_DOWNLOAD"
-    ["$NETWORK_VOLUME/ComfyUI/models/loras"]="$LORAS_IDS_TO_DOWNLOAD"
-)
-
-# Counter to track background jobs
-download_count=0
-
-# Ensure directories exist and schedule downloads in background
-for TARGET_DIR in "${!MODEL_CATEGORIES[@]}"; do
-    mkdir -p "$TARGET_DIR"
-    MODEL_IDS_STRING="${MODEL_CATEGORIES[$TARGET_DIR]}"
-
-    # Skip if the value is the default placeholder
-    if [[ "$MODEL_IDS_STRING" == "replace_with_ids" ]]; then
-        echo "⏭️  Skipping downloads for $TARGET_DIR (default value detected)"
-        continue
+if [ ! -f "$ULTRALYTICS_DIR/bbox/Eyes.pt" ]; then
+    if [ -f "/Eyes.pt" ]; then
+        mv "/Eyes.pt" "$ULTRALYTICS_DIR/bbox/Eyes.pt"
+        echo "Moved Eyes.pt to the correct location."
+    else
+        echo "Eyes.pt not found in the root directory."
     fi
-
-    IFS=',' read -ra MODEL_IDS <<< "$MODEL_IDS_STRING"
-
-    for MODEL_ID in "${MODEL_IDS[@]}"; do
-        sleep 1
-        echo "🚀 Scheduling download: $MODEL_ID to $TARGET_DIR"
-        (cd "$TARGET_DIR" && download_with_aria.py -m "$MODEL_ID") &
-        ((download_count++))
-    done
-done
-
-echo "📋 Scheduled $download_count downloads in background"
-
-# Wait for all downloads to complete
-if pgrep -x "aria2c" > /dev/null; then
-    echo "⏳ Waiting for downloads..."
-    while pgrep -x "aria2c" > /dev/null; do
-        sleep 5
-    done
+else
+    echo "Eyes.pt already exists. Skipping."
 fi
 
-echo "✅ All models downloaded successfully!"
-
-echo "All downloads completed!"
-
-echo "Downloading upscale models"
-mkdir -p "$NETWORK_VOLUME/ComfyUI/models/upscale_models"
-if [ ! -f "$NETWORK_VOLUME/ComfyUI/models/upscale_models/4xLSDIR.pth" ]; then
+if [ ! -f "$UPSCALE_MODELS_DIR/4xLSDIR.pth" ]; then
     if [ -f "/4xLSDIR.pth" ]; then
-        mv "/4xLSDIR.pth" "$NETWORK_VOLUME/ComfyUI/models/upscale_models/4xLSDIR.pth"
+        mv "/4xLSDIR.pth" "$UPSCALE_MODELS_DIR/4xLSDIR.pth"
         echo "Moved 4xLSDIR.pth to the correct location."
     else
         echo "4xLSDIR.pth not found in the root directory."
@@ -758,112 +808,247 @@ else
     echo "4xLSDIR.pth already exists. Skipping."
 fi
 
-echo "Finished downloading models!"
+# ============================================================
+# OPTIMIZED ANTELOPEV2 ENGINE (Integrated with custom fn)
+# ============================================================
 
-echo "Checking and copying workflow..."
+# Only trigger if the target directory doesn't have the final .onnx models
+if [ ! -d "$ANTELOPEV2_DIR" ] || [ -z "$(ls -A "$ANTELOPEV2_DIR" 2> /dev/null | grep '\.onnx$')" ]; then
+    echo "📥 AntelopeV2 models missing. Launching download allocation..."
+
+    # Call your custom function
+    download_model "https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip" "$ANTELOPEV2_DIR/antelopev2.zip"
+
+    if [ ! -f "$ANTELOPEV2_DIR/antelopev2.zip" ] || [ -f "$ANTELOPEV2_DIR/antelopev2.zip.aria2" ]; then
+        echo "⏳ Active download detected. Holding script execution until aria2c finishes..."
+        wait "$LAST_DOWNLOAD_PID" 2> /dev/null || true
+    fi
+
+    # Proceed to extraction now that the file is fully on disk
+    if [ -f "$ANTELOPEV2_DIR/antelopev2.zip" ]; then
+        echo "📦 Extracting and flattening AntelopeV2 assets..."
+        unzip -oj "$ANTELOPEV2_DIR/antelopev2.zip" -d "$ANTELOPEV2_DIR"
+
+        echo "🧹 Cleaning up zip archive to keep network volume clean..."
+        rm -f "$ANTELOPEV2_DIR/antelopev2.zip"
+        echo "✅ AntelopeV2 engine deployment complete."
+    fi
+else
+    echo "✅ AntelopeV2 models already present and extracted. Skipping setup."
+fi
+
+# ============================================================
+# OPTIMIZED BUFFALO_L ENGINE
+# ============================================================
+
+# Only trigger if the target directory doesn't have the final .onnx models
+if [ ! -d "$BUFFALO_L_DIR" ] || [ -z "$(ls -A "$BUFFALO_L_DIR" 2> /dev/null | grep '\.onnx$')" ]; then
+    echo "📥 Buffalo_L models missing. Launching download allocation..."
+
+    # Call your custom function
+    download_model "https://huggingface.co/vladmandic/insightface-faceanalysis/resolve/main/buffalo_l.zip" "$BUFFALO_L_DIR/buffalo_l.zip"
+    if [ ! -f "$BUFFALO_L_DIR/buffalo_l.zip" ] || [ -f "$BUFFALO_L_DIR/buffalo_l.zip.aria2" ]; then
+        echo "⏳ Active download detected. Holding script execution until aria2c finishes..."
+        wait "$LAST_DOWNLOAD_PID" 2> /dev/null || true
+    fi
+
+    # Proceed to extraction now that the file is fully on disk
+    if [ -f "$BUFFALO_L_DIR/buffalo_l.zip" ]; then
+        echo "📦 Extracting and flattening Buffalo_L assets..."
+        unzip -oj "$BUFFALO_L_DIR/buffalo_l.zip" -d "$BUFFALO_L_DIR"
+
+        echo "🧹 Cleaning up zip archive to keep network volume clean..."
+        rm -f "$BUFFALO_L_DIR/buffalo_l.zip"
+        echo "✅ Buffalo_L engine deployment complete."
+    fi
+else
+    echo "✅ Buffalo_L models already present and extracted. Skipping setup."
+fi
+
+# ============================================================
+# WORKFLOWS MIGRATION
+# ============================================================
+
+SOURCE_DIR="/comfyui-video/workflows"
+
+# Ensure destination directory exists
 mkdir -p "$WORKFLOW_DIR"
 
-# Ensure the file exists in the current directory before moving it
-cd /
+if [ -d "$SOURCE_DIR" ] && [ "$(ls -A "$SOURCE_DIR" 2> /dev/null)" ]; then
+    echo "🔄 Migrating workflows and subfolders cleanly..."
 
-SOURCE_DIR="/comfyui-wan/workflows"
+    # rsync safely merges contents. If a folder exists, it adds new files inside it
+    # without deleting old ones.
+    rsync -av --ignore-existing "$SOURCE_DIR/" "$WORKFLOW_DIR/" > /dev/null
 
-# Loop over each subdirectory in the source directory
-for dir in "$SOURCE_DIR"/*/; do
-    # Skip if no directories match (empty glob)
-    [[ -d "$dir" ]] || continue
+    # Wipe the source directory clean now that everything is safely copied/merged
+    rm -rf "$SOURCE_DIR"/*
+    echo "✅ Workflow migration and merge complete!"
+else
+    echo "✨ No source workflows found for migration."
+fi
 
-    dir_name="$(basename "$dir")"
-    dest_dir="$WORKFLOW_DIR/$dir_name"
+# ============================================================
+# SURFACE EMBEDDED NODE WORKFLOWS
+# ============================================================
 
-    if [[ -e "$dest_dir" ]]; then
-        echo "Directory already exists in destination. Deleting source: $dir"
-        rm -rf "$dir"
-    else
-        echo "Moving: $dir to $WORKFLOW_DIR"
-        mv "$dir" "$WORKFLOW_DIR/"
-    fi
+WORKFLOW_EXPORT_DIR="$NETWORK_VOLUME/Workflows/Node_Examples"
+mkdir -p "$WORKFLOW_EXPORT_DIR"
+
+echo "🔗 Symlinking embedded node workflows for easy access..."
+
+# 1. We look inside common directory structures to avoid dragging in non-workflow config.json files
+# 2. We use relative path mapping to preserve nested folders (like i2v vs t2v examples)
+find "$NETWORK_VOLUME/ComfyUI/custom_nodes" -type f -name "*.json" \
+    \( -path "*/example_workflows/*" -o -path "*/examples/*" -o -path "*/workflows/*" \) | while read -r workflow_path; do
+
+    # Extract the relative path path starting right after /custom_nodes/
+    # This turns a deep path into 'ComfyUI-WanAnimatePreprocess/example_workflows/i2v/example.json'
+    relative_path=$(echo "$workflow_path" | awk -F'/custom_nodes/' '{print $2}')
+
+    # Determine the target path inside your export directory
+    target_link_path="$WORKFLOW_EXPORT_DIR/$relative_path"
+
+    # Ensure the parent folders exist cleanly inside the export tree
+    mkdir -p "$(dirname "$target_link_path")"
+
+    # Create the relative or absolute target mapping symlink safely
+    ln -sf "$workflow_path" "$target_link_path"
 done
 
-# UI Compatibility Mode
-export CHANGE_PREVIEW_METHOD="true"
+echo "✅ Node example symlinking engine execution complete!"
 
-if [ "${CHANGE_PREVIEW_METHOD:-false}" = "true" ]; then
-    echo "Updating default preview method..."
-    VHS_JS_FILE="$NETWORK_VOLUME/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite/web/js/VHS.core.js"
+# ============================================================
+# COMFYUI IMPACT SUBPACK CONFIGURATION
+# ============================================================
 
-    if [ -f "$VHS_JS_FILE" ]; then
-        sed -i '/id: *'"'"'VHS.LatentPreview'"'"'/,/defaultValue:/s/defaultValue: false/defaultValue: true/' "$VHS_JS_FILE"
-        echo "Default preview method updated to 'auto'"
-    else
-        echo "⚠️ VHS.core.js not found. Skipping preview method update."
+echo "📋 Ensuring ComfyUI-Impact-Subpack user directory exists..."
+# Extracts the parent directory path dynamically to avoid creating a folder named '.txt'
+mkdir -p "$(dirname "$MODEL_WHITELIST_DIR")"
+
+echo "🔒 Writing model whitelist overrides..."
+cat > "$MODEL_WHITELIST_DIR" << 'EOF'
+Eyes.pt
+face_yolov11l.pt
+yolo11l-seg.pt
+film_net_fp32.pt
+EOF
+
+echo "✅ Model whitelist successfully initialized!"
+
+# ============================================================
+# DYNAMIC CIVITAI DOWNLOAD ENGINE
+# ============================================================
+
+# Ensure the new UNET target path exists on the volume if GGUF downloads are requested
+if [ -n "$GGUF_IDS_TO_DOWNLOAD" ] && [ "$GGUF_IDS_TO_DOWNLOAD" != "replace_with_ids" ]; then
+    mkdir -p "$GGUF_DIR"
+fi
+
+# Initialize a clean, empty associative array
+declare -A MODEL_CATEGORIES
+
+# Dynamically populate the map to guarantee absolute syntax safety on empty environment variables
+[ -n "$CHECKPOINT_IDS_TO_DOWNLOAD" ] && MODEL_CATEGORIES["$CHECKPOINTS_DIR"]="$CHECKPOINT_IDS_TO_DOWNLOAD"
+[ -n "$LORAS_IDS_TO_DOWNLOAD" ] && MODEL_CATEGORIES["$LORAS_DIR"]="$LORAS_IDS_TO_DOWNLOAD"
+[ -n "$BASE_MODEL_IDS_TO_DOWNLOAD" ] && MODEL_CATEGORIES["$DIFFUSION_MODELS_DIR"]="$BASE_MODEL_IDS_TO_DOWNLOAD"
+[ -n "$GGUF_IDS_TO_DOWNLOAD" ] && MODEL_CATEGORIES["$GGUF_DIR"]="$GGUF_IDS_TO_DOWNLOAD"
+
+# Counter and PID tracking
+download_count=0
+download_pids=()
+
+# Schedule downloads in background
+for TARGET_DIR in "${!MODEL_CATEGORIES[@]}"; do
+    MODEL_IDS_STRING="${MODEL_CATEGORIES[$TARGET_DIR]}"
+
+    if [[ "$MODEL_IDS_STRING" == "replace_with_ids" ]]; then
+        echo "⏭️  Skipping downloads for $TARGET_DIR (Default placeholder detected)"
+        continue
     fi
-    CONFIG_PATH="$COMFYUI_DIR/user/default/ComfyUI-Manager"
-    CONFIG_FILE="$CONFIG_PATH/config.ini"
 
-    # Ensure the directory exists
-    mkdir -p "$CONFIG_PATH"
+    IFS=',' read -ra MODEL_IDS <<< "$MODEL_IDS_STRING"
+    for MODEL_ID in "${MODEL_IDS[@]}"; do
+        CLEAN_ID="${MODEL_ID// /}"
+        [ -z "$CLEAN_ID" ] && continue
 
-    # Create the config file if it doesn't exist
-    if [ ! -f "$CONFIG_FILE" ]; then
-        echo "Creating config.ini..."
-        cat << EOL > "$CONFIG_FILE"
+        echo "🚀 Scheduling CivitAI download: $CLEAN_ID to $TARGET_DIR"
+        (cd "$TARGET_DIR" && $PYTHON_BIN /usr/local/bin/download_with_aria.py -m "$CLEAN_ID") &
+        download_pids+=($!)
+        ((download_count++))
+    done
+done
+
+echo "📋 Scheduled $download_count downloads in background."
+
+# ============================================================
+# CRITICAL BOUNDARY: Block thread until background jobs finish
+# ============================================================
+
+if [ "$download_count" -gt 0 ]; then
+    echo "⏳ Holding boot sequence: Waiting for $download_count background model downloads to complete..."
+    wait "${download_pids[@]}"
+    echo "✅ All background model downloads have finished successfully!"
+else
+    echo "✅ No background downloads were required."
+fi
+
+# Final catch-all safety wall for any lingering aria2c tasks
+if pgrep -x "aria2c" > /dev/null; then
+    echo "⏳ Waiting for lingering aria2c processes to completely close..."
+    while pgrep -x "aria2c" > /dev/null; do
+        sleep 5
+    done
+fi
+
+echo "✅ All models downloaded successfully!"
+
+# ============================================================
+# ComfyUI
+# ============================================================
+
+echo "Updating default preview method..."
+CONFIG_PATH="$NETWORK_VOLUME/ComfyUI/user/default/ComfyUI-Manager"
+CONFIG_FILE="$CONFIG_PATH/config.ini"
+
+# Ensure the directory exists
+mkdir -p "$CONFIG_PATH"
+
+# Create the config file if it doesn't exist
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Creating config.ini..."
+    cat << EOL > "$CONFIG_FILE"
 [default]
 preview_method = auto
 git_exe =
 use_uv = False
 channel_url = https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main
-share_option = all
+# 1. Block unauthorized external network sharing
+share_option = none
 bypass_ssl = False
 file_logging = True
 component_policy = workflow
-update_policy = stable-comfyui
+# 2. Lock down core ComfyUI updates completely
+update_policy = none
 windows_selector_event_loop_policy = False
 model_download_by_agent = False
 downgrade_blacklist =
-security_level = normal
+# 3. Elevate security to block background pip executions
+security_level = high
 skip_migration_check = False
 always_lazy_install = False
 network_mode = public
 db_mode = cache
 EOL
-    else
-        echo "config.ini already exists. Updating preview_method..."
-        sed -i 's/^preview_method = .*/preview_method = auto/' "$CONFIG_FILE"
-    fi
-    echo "Config file setup complete!"
-    echo "Default preview method updated to 'auto'"
 else
-    echo "Skipping preview method update (CHANGE_PREVIEW_METHOD is not 'true')."
+    echo "config.ini already exists. Updating preview_method..."
+    sed -i 's/^preview_method = .*/preview_method = auto/' "$CONFIG_FILE"
 fi
+echo "Config file setup complete!"
+echo "Default preview method updated to 'auto'"
 
 # Workspace as main working directory
-echo "cd $NETWORK_VOLUME" >> ~/.bashrc
-
-# Install dependencies
-echo "⏳ Waiting for background dependency installs to finish..."
-if [ -n "$WAN_REQS_PID" ]; then
-    wait $WAN_REQS_PID
-    REQ_STATUS=$?
-else
-    REQ_STATUS=0
-fi
-
-if [ $REQ_STATUS -ne 0 ]; then
-    echo "❌ Core Wan node requirements failed to install."
-else
-    echo "✅ All Wan dependencies installed successfully."
-fi
-
-status_msg "Checking for ZIP-masked LoRAs..."
-cd "$LORAS_DIR" || echo "LoRA dir not found, skipping rename."
-# The 'nullglob' prevents the loop from running if no .zip files exist
-shopt -s nullglob
-for file in *.zip; do
-    echo "📦 Unmasking $file to .safetensors"
-    mv "$file" "${file%.zip}.safetensors"
-done
-shopt -u nullglob
+grep -qxF "cd $NETWORK_VOLUME" ~/.bashrc || echo "cd $NETWORK_VOLUME" >> ~/.bashrc
 
 # Return to the ComfyUI root directory before launching
 cd "$NETWORK_VOLUME/ComfyUI" || exit 1
@@ -873,9 +1058,7 @@ cd "$NETWORK_VOLUME/ComfyUI" || exit 1
 GPU_VRAM_MB=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -n 1)
 VRAM_THRESHOLD=32000 # 32GB in MB
 
-echo "📟 Detected GPU VRAM: ${GPU_VRAM_MB}MB"
-
-# Build Command
+# Start with base flags
 LAUNCH_FLAGS="--listen --preview-method auto"
 
 # Add FP8 flags if enabled
@@ -894,22 +1077,16 @@ if [ "$GPU_VRAM_MB" -ge "$VRAM_THRESHOLD" ]; then
     echo "🚀 High VRAM detected (32GB+). Enabling --highvram."
     LAUNCH_FLAGS="$LAUNCH_FLAGS --highvram"
 else
-    echo "⚖️ Standard VRAM detected."
-    # ComfyUI natively uses --weight-dtype to force model precision
-    LAUNCH_FLAGS="$LAUNCH_FLAGS --medvram"
+    echo "⚖️ Standard VRAM detected. Letting ComfyUI handle dynamic offloading."
 fi
 
-# SageAttention check
+# Add SageAttention
 if [ "$SAGE_ATTENTION_AVAILABLE" = "true" ]; then
-    echo "✨ SageAttention enabled."
     LAUNCH_FLAGS="$LAUNCH_FLAGS --use-sage-attention"
 fi
 
-COMFYUI_CMD="$PYTHON_BIN $COMFYUI_DIR/main.py $LAUNCH_FLAGS"
-
-# Runtime Updates (Added 'install' keyword)
-echo "🆙 Updating runtime extensions..."
-$PYTHON_BIN -m pip install --no-cache-dir comfy-aimdo comfy-kitchen --upgrade
+# Final Command Construction
+COMFYUI_CMD="$PYTHON_BIN ./main.py $LAUNCH_FLAGS"
 
 # Launch
 URL="http://127.0.0.1:8188"
@@ -917,30 +1094,69 @@ status_msg "▶️ Starting ComfyUI with flags: $LAUNCH_FLAGS"
 nohup $COMFYUI_CMD > "$NETWORK_VOLUME/comfyui_nohup.log" 2>&1 &
 echo $! > /tmp/comfyui.pid # Save PID for restart
 
-# Debugging mode
-cat > /usr/local/bin/comfyui-restart << 'EOF'
+# ============================================================
+# LIVE-EVALUATION RESTART SCRIPT GENERATION
+# ============================================================
+
+# We use a quoted heredoc 'EOF' here to keep the inner variables intact for live runtime evaluation!
+cat << 'EOF' > /usr/local/bin/comfyui-restart
 #!/bin/bash
 
+# Live-resolve environment paths
 PYTHON_BIN="/usr/bin/python3"
-COMFYUI_DIR="${NETWORK_VOLUME:-/workspace}/ComfyUI"
-LOG_FILE="${NETWORK_VOLUME:-/workspace}/comfyui_nohup.log"
+COMFYUI_DIR=$(pwd)
+LOG_FILE="comfyui_nohup.log"
 
-echo "Stopping ComfyUI..."
+# Catch accidental out-of-directory executions
+if [ ! -f "./main.py" ] && [ -d "/workspace/ComfyUI" ]; then
+    COMFYUI_DIR="/workspace/ComfyUI"
+fi
+
+# Detect log path safety
+[ -f "../comfyui_nohup.log" ] && LOG_FILE="../comfyui_nohup.log"
+
+echo "🛑 Stopping running ComfyUI process..."
 kill $(cat /tmp/comfyui.pid 2>/dev/null) 2>/dev/null
 sleep 2
 
-echo "Relaunching with debug flags..."
-BASE_FLAGS="--listen --preview-method auto --use-sage-attention"
+# RE-EVALUATE HARDWARE ENVIRONMENT LIVE
+# This ensures that if they change VRAM templates or switch configurations, the flags follow them.
+GPU_VRAM_MB=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -n 1)
+VRAM_THRESHOLD=32000
 
-echo "Base flags: $BASE_FLAGS"
-echo "Extra flags: $@"
+BASE_FLAGS="--listen --preview-method auto"
 
-nohup $PYTHON_BIN $COMFYUI_DIR/main.py \
-    $BASE_FLAGS $@ \
-    > "$LOG_FILE" 2>&1 &
+# Seamlessly check variable states inside the live shell container
+if [ "${USE_FP8_TEXT_ENC:-true}" = "true" ]; then
+    BASE_FLAGS="$BASE_FLAGS --fp8_e4m3fn-text-enc"
+fi
+
+if [ "${USE_FP8_MODEL:-}" = "true" ]; then
+    BASE_FLAGS="$BASE_FLAGS --fp8_e4m3fn-unet"
+fi
+
+if [ "$GPU_VRAM_MB" -ge "$VRAM_THRESHOLD" ]; then
+    BASE_FLAGS="$BASE_FLAGS --highvram"
+fi
+
+# Live Python execution test to see if SageAttention compiles/loads cleanly right now
+if /usr/bin/python3 -c "import sageattention" &> /dev/null; then
+    echo "⚡ SageAttention import verification: SUCCESS. Appending launch flag."
+    BASE_FLAGS="$BASE_FLAGS --use-sage-attention"
+else
+    echo "⚠️ SageAttention import verification: FAILED or missing. Omitting flag."
+fi
+
+echo "📋 Active debugger flags: $BASE_FLAGS"
+if [ ! -z "$*" ]; then
+    echo "🔧 User-appended arguments: $*"
+fi
+
+cd "$COMFYUI_DIR" || exit 1
+nohup $PYTHON_BIN ./main.py $BASE_FLAGS $* > "$LOG_FILE" 2>&1 &
 
 echo $! > /tmp/comfyui.pid
-echo "ComfyUI restarted PID $(cat /tmp/comfyui.pid)"
+echo "✅ ComfyUI successfully restarted with PID $(cat /tmp/comfyui.pid)"
 EOF
 
 chmod +x /usr/local/bin/comfyui-restart
@@ -969,19 +1185,23 @@ fi
 echo ""
 echo "================================================"
 echo ""
-echo "  Template ready!"
+echo "  Use the SSH command provided by your host: "
 echo ""
-echo "  To access JupyterLab from your local machine:"
+echo "  Filebrowser:"
 echo ""
-echo "  1) Use the SSH command provided by your host (Vast.ai / RunPod),"
-echo "     and add port forwarding like this:"
+echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 8080:localhost:8080"
+echo ""
+echo "     Then open your browser:"
+echo "     http://localhost:8080"
+echo ""
+echo "  JupyterLab:"
 echo ""
 echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 8888:localhost:8888"
 echo ""
-echo "  2) Then open your browser:"
+echo "     Then open your browser:"
 echo "     http://localhost:8888/lab"
 echo ""
-echo "  To access ComfyUI GUI on port 8188:"
+echo "  ComfyUI GUI:"
 echo ""
 echo "     ssh -p <SSH_PORT> hostname@<SERVER_IP> -L 8188:localhost:8188"
 echo ""
@@ -993,11 +1213,10 @@ echo ""
 echo "================================================"
 echo ""
 
-# ================================
+# ============================================================
 # SSH Startup
-# ================================
-
-echo "🔐 Starting SSH server..."
+# ============================================================
+status_msg "[4/4] 🔐 Starting SSH server..."
 
 mkdir -p /var/run/sshd
 chmod 700 /root/.ssh
