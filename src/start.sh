@@ -554,8 +554,8 @@ if [ "${DOWNLOAD_WAN22_I2V_FP8:-}" = "true" ]; then
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors"
 fi
 
-if [ "${DOWNLOAD_WAN22_ENHANCED_NSFW_FP8:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 enhanced nsfw SVI fp8_e4m3fn models..."
+if [ "${DOWNLOAD_WAN22_SVI_NSFW_FP8:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 nsfw SVI fp8_e4m3fn models..."
     download_model "https://huggingface.co/rgomezs2010/loras_wan/resolve/7631c58e89a5e045825d9ecc6de7888d8f613f33/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8H.safetensors" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8H.safetensors"
     download_model "https://huggingface.co/rgomezs2010/loras_wan/resolve/7631c58e89a5e045825d9ecc6de7888d8f613f33/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8L.safetensors" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8L.safetensors"
 fi
@@ -614,7 +614,7 @@ fi
 # WAN 2.2 TEXT ENCODER, VAE & OTHER ASSETS
 # ============================================================
 
-if [ "${DOWNLOAD_WAN22_T2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN22_I2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN22_ENHANCED_NSFW_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_ANIMATE_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_S2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_FUN_CONTROL_FP8:-}" = "true" ]; then
+if [ "${DOWNLOAD_WAN22_T2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN22_I2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN22_SVI_NSFW_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_ANIMATE_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_S2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_FUN_CONTROL_FP8:-}" = "true" ]; then
     echo "📥 Downloading Wan VAE, text encoder and clip vision arrays..."
     download_model "https://huggingface.co/NSFW-API/NSFW-Wan-UMT5-XXL/resolve/main/nsfw_wan_umt5-xxl_fp8_scaled.safetensors" "$TEXT_ENCODERS_DIR/nsfw_wan_umt5-xxl_fp8_scaled.safetensors"
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors" "$TEXT_ENCODERS_DIR/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors"

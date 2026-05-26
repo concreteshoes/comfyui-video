@@ -45,7 +45,7 @@ comfyui-restart --disable-smart-memory --lowvram
 
 ### Deploy
 - RunPod  - https://tinyurl.com/327m5d3t
-- Vast.ai - https://tinyurl.com/bdz39n6e
+- Vast.ai - https://tinyurl.com/bdfshpns
 
 ### Variables Selection
 
@@ -57,8 +57,9 @@ Text encoders for both models are fp8. Controlnets are Depth and HED.
 ```env
 DOWNLOAD_LTX23_DEV_MXFP8=""
 DOWNLOAD_LTX23_DEV_GGUF_Q8=""
-DOWNLOAD_WAN22_FP8=""
-DOWNLOAD_WAN22_ENHANCED_NSFW_FP8=""
+DOWNLOAD_WAN22_T2V_FP8=""
+DOWNLOAD_WAN22_I2V_FP8=""
+DOWNLOAD_WAN22_SVI_NSFW_FP8=""
 DOWNLOAD_WAN_ANIMATE_FP8=""
 DOWNLOAD_WAN_S2V_FP8=""
 DOWNLOAD_WAN_FUN_CONTROL_FP8=""
