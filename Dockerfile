@@ -154,7 +154,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         https://github.com/Jonseed/ComfyUI-Detail-Daemon.git \
         https://github.com/kijai/ComfyUI-WanVideoWrapper.git \
         https://github.com/kijai/ComfyUI-WanAnimatePreprocess.git \
-        https://github.com/kijai/ComfyUI-SCAIL-Pose.git \
         https://github.com/obisin/ComfyUI-FSampler.git \
         https://github.com/cmeka/ComfyUI-WanMoEScheduler.git \
         https://github.com/lrzjason/ComfyUI-VAE-Utils.git \

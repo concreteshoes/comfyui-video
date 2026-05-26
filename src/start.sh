@@ -282,7 +282,6 @@ LORAS_DIR="$NETWORK_VOLUME/ComfyUI/models/loras"
 CHECKPOINTS_DIR="$NETWORK_VOLUME/ComfyUI/models/checkpoints"
 GGUF_DIR="$NETWORK_VOLUME/ComfyUI/models/unet"
 DETECTION_DIR="$NETWORK_VOLUME/ComfyUI/models/detection"
-NLF_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/models/nlf"
 AUDIO_ENCODERS_DIR="$NETWORK_VOLUME/ComfyUI/models/audio_encoders"
 LATENTSYNC_DIR="$NETWORK_VOLUME/ComfyUI/models/checkpoints/latentsync"
 LIVEPORTRAIT_DIR="$NETWORK_VOLUME/ComfyUI/models/liveportrait"
@@ -472,30 +471,38 @@ download_model() {
 }
 
 # ============================================================
-# LTX 2.3 ARCHITECTURE
+# LTX 2.3
 # ============================================================
 
-if [ "${DOWNLOAD_LTX23:-}" = "true" ]; then
-    echo "📥 Downloading LTX 2.3 (BF16) ..."
-    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/diffusion_models/ltx-2.3-22b-dev_transformer_only_bf16.safetensors" "$DIFFUSION_MODELS_DIR/ltx-2.3-22b-dev_transformer_only_bf16.safetensors"
-fi
+if [ "${DOWNLOAD_LTX23_DEV_MXFP8:-}" = "true" ]; then
+    echo "📥 Downloading LTX 2.3 mxfp8 dev & dependencies ..."
+    download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/diffusion_models/ltx-2.3-22b-dev_transformer_only_mxfp8_block32.safetensors" "$DIFFUSION_MODELS_DIR/ltx-2.3-22b-dev_transformer_only_mxfp8_block32.safetensors"
 
-if [ "${DOWNLOAD_LTX23_GGUF:-}" = "true" ]; then
-    echo "📥 Downloading LTX 2.3 GGUF (Q8)..."
-    download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/ltx-2.3-22b-dev-Q8_0.gguf" "$GGUF_DIR/ltx-2.3-22b-dev-Q8_0.gguf"
-fi
-
-if [ "${DOWNLOAD_LTX23:-}" = "true" ] || [ "${DOWNLOAD_LTX23_GGUF:-}" = "true" ]; then
-    echo "📥 Downloading shared LTX 2.3 dependency ecosystem..."
-
-    # Download text encoder
-    download_model "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it.safetensors" "$TEXT_ENCODERS_DIR/gemma_3_12B_it.safetensors"
+    # Download the text encoder
+    download_model "https://huggingface.co/GitMylo/LTX-2-comfy_gemma_fp8_e4m3fn/resolve/main/gemma_3_12B_it_fp8_e4m3fn.safetensors" "$TEXT_ENCODERS_DIR/gemma_3_12B_it_fp8_e4m3fn.safetensors"
     download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/text_encoders/ltx-2.3_text_projection_bf16.safetensors" "$TEXT_ENCODERS_DIR/ltx-2.3_text_projection_bf16.safetensors"
 
-    # Download VAE
+    #Download the VAE
     download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/LTX23_video_vae_bf16.safetensors" "$VAE_DIR/LTX23_video_vae_bf16.safetensors"
     download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/LTX23_audio_vae_bf16.safetensors" "$VAE_DIR/LTX23_audio_vae_bf16.safetensors"
     download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/taeltx2_3.safetensors" "$VAE_DIR/taeltx2_3.safetensors"
+fi
+
+if [ "${DOWNLOAD_LTX23_DEV_GGUF_Q8:-}" = "true" ]; then
+    echo "📥 Downloading LTX 2.3 dev GGUF (Q8) & dependencies..."
+    download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/ltx-2.3-22b-dev-Q8_0.gguf" "$GGUF_DIR/ltx-2.3-22b-dev-Q8_0.gguf"
+    download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/text_encoders/ltx-2.3-22b-dev_embeddings_connectors.safetensors" "$TEXT_ENCODERS_DIR/ltx-2.3-22b-dev_embeddings_connectors.safetensors"
+
+    # Download text encoder
+    download_model "https://huggingface.co/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-UD-Q8_K_XL.gguf" "$TEXT_ENCODERS_DIR/gemma-3-12b-it-UD-Q8_K_XL.gguf"
+
+    #Download the VAE
+    download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/vae/ltx-2.3-22b-dev_audio_vae.safetensors" "$VAE_DIR/ltx-2.3-22b-dev_audio_vae.safetensors"
+    download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/vae/ltx-2.3-22b-dev_video_vae.safetensors" "$VAE_DIR/ltx-2.3-22b-dev_video_vae.safetensors"
+fi
+
+if [ "${DOWNLOAD_LTX23_DEV_MXFP8:-}" = "true" ] || [ "${DOWNLOAD_LTX23_DEV_GGUF_Q8:-}" = "true" ]; then
+    echo "📥 Downloading shared LTX 2.3 loras and upscalers..."
 
     # Download distilled loras
     download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/loras/ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors" "$LORAS_DIR/ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors"
@@ -512,44 +519,70 @@ if [ "${DOWNLOAD_LTX23:-}" = "true" ] || [ "${DOWNLOAD_LTX23_GGUF:-}" = "true" ]
 fi
 
 # ============================================================
-# WAN 2.2 DiT
+# WAN 2.2
 # ============================================================
 
-if [ "${DOWNLOAD_WAN22:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 Base Models (T2V & I2V)..."
-    download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan-2.2-T2V-High-Noise-BF16.safetensors" "$DIFFUSION_MODELS_DIR/Wan-2.2-T2V-High-Noise-BF16.safetensors"
-    download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan-2.2-T2V-Low-Noise-BF16.safetensors" "$DIFFUSION_MODELS_DIR/Wan-2.2-T2V-Low-Noise-BF16.safetensors"
-    download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan-2.2-I2V-High-Noise-BF16.safetensors" "$DIFFUSION_MODELS_DIR/Wan-2.2-I2V-High-Noise-BF16.safetensors"
-    download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan-2.2-I2V-Low-Noise-BF16.safetensors" "$DIFFUSION_MODELS_DIR/Wan-2.2-I2V-Low-Noise-BF16.safetensors"
+if [ "${DOWNLOAD_WAN22_T2V_FP8:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 t2v fp8_e4m3fn models..."
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/T2V/Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/T2V/Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors"
+
+    # 4-Step Lightning Matrix T2V
+    download_model "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V2.0/high_noise_model.safetensors" "$LORAS_DIR/t2v_lightx2v_high_noise_model.safetensors"
+    download_model "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V2.0/low_noise_model.safetensors" "$LORAS_DIR/t2v_lightx2v_low_noise_model.safetensors"
+    download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_t2v_A14b_high_noise_lora_rank64_lightx2v_4step_1217.safetensors" "$LORAS_DIR/t2v_lightx2v_high_noise_1217.safetensors"
+    download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_t2v_A14b_low_noise_lora_rank64_lightx2v_4step_1217.safetensors" "$LORAS_DIR/t2v_lightx2v_low_noise_1217.safetensors"
+fi
+
+if [ "${DOWNLOAD_WAN22_I2V_FP8:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 i2v fp8_e4m3fn models..."
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/I2V/Wan2_2-I2V-A14B-HIGH_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-I2V-A14B-HIGH_fp8_e4m3fn_scaled_KJ.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/I2V/Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors"
+
+    # 4-Step Lightning Matrix I2V
+    download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors" "$LORAS_DIR/i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors"
+    download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors" "$LORAS_DIR/i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors"
+
+    # Alternative I2V Step-Distill Models (Kijai Comfy Variant)
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors" "$LORAS_DIR/I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors" "$LORAS_DIR/I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_256_fp16.safetensors" "$LORAS_DIR/I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_256_fp16.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_256_fp16.safetensors" "$LORAS_DIR/I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_256_fp16.safetensors"
+
+    # Stable Video Infinity v2 PRO Modules
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors"
+fi
+
+if [ "${DOWNLOAD_WAN22_ENHANCED_NSFW_FP8:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 enhanced nsfw SVI fp8_e4m3fn models..."
+    download_model "https://huggingface.co/rgomezs2010/loras_wan/resolve/7631c58e89a5e045825d9ecc6de7888d8f613f33/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8H.safetensors" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8H.safetensors"
+    download_model "https://huggingface.co/rgomezs2010/loras_wan/resolve/7631c58e89a5e045825d9ecc6de7888d8f613f33/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8L.safetensors" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8L.safetensors"
 fi
 
 # ============================================================
 # WAN 2.2 ANIMATE & POSE ECOSYSTEM (SteadyDancer Replacements)
 # ============================================================
 
-if [ "${DOWNLOAD_WAN_ANIMATE:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 Animate Model & Infrastructure..."
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_animate_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.2_animate_14B_bf16.safetensors"
+if [ "${DOWNLOAD_WAN_ANIMATE_FP8:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 Animate model & infrastructure..."
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/Wan22Animate/Wan2_2-Animate-14B_fp8_scaled_e4m3fn_KJ_v2.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-Animate-14B_fp8_scaled_e4m3fn_KJ_v2.safetensors"
     download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_animate_14B_relight_lora_bf16.safetensors" "$LORAS_DIR/wan2.2_animate_14B_relight_lora_bf16.safetensors"
 
     # Tracking Detection matrices for ComfyUI-WanAnimatePreprocess & SCAIL
-    echo "📥 Fetching Wan Animate Pose & Object Detection models..."
+    echo "📥 Downloading Wan Animate pose & object detection models..."
     download_model "https://huggingface.co/Wan-AI/Wan2.2-Animate-14B/resolve/main/process_checkpoint/det/yolov10m.onnx" "$DETECTION_DIR/yolov10m.onnx"
     download_model "https://huggingface.co/Kijai/vitpose_comfy/resolve/main/onnx/vitpose_h_wholebody_data.bin" "$DETECTION_DIR/vitpose_h_wholebody_data.bin"
     download_model "https://huggingface.co/Kijai/vitpose_comfy/resolve/main/onnx/vitpose_h_wholebody_model.onnx" "$DETECTION_DIR/vitpose_h_wholebody_model.onnx"
-
-    # SCAIL-Pose Core Infrastructure Setup
-    echo "📥 Fetching SCAIL NLF Multi-Alignment Model..."
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/SCAIL/nlf_l_multi_0.3.2_fp16.safetensors" "$NLF_MODELS_DIR/nlf_l_multi_0.3.2_fp16.safetensors"
 fi
 
 # ============================================================
 # WAN 2.2 SPEECH-TO-VIDEO
 # ============================================================
 
-if [ "${DOWNLOAD_WAN_S2V:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 S2V Lip-Sync Layers..."
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_s2v_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.2_s2v_14B_bf16.safetensors"
+if [ "${DOWNLOAD_WAN_S2V_FP8:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 S2V lip-sync layers..."
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/S2V/Wan2_2-S2V-14B_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-S2V-14B_fp8_e4m3fn_scaled_KJ.safetensors"
     download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors" "$AUDIO_ENCODERS_DIR/wav2vec2_large_english_fp16.safetensors"
 fi
 
@@ -558,17 +591,17 @@ fi
 # ============================================================
 
 # 1. Wan 2.2 Fun Control Engine (Native Multi-Modal Pose/Depth/Canny Base)
-if [ "${DOWNLOAD_WAN_FUN_CONTROL:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 Fun Control Base Models (BF16)..."
+if [ "${DOWNLOAD_WAN_FUN_CONTROL_FP8:-}" = "true" ]; then
+    echo "📥 Downloading Wan 2.2 fp8 Fun Control models..."
 
     # Official Alibaba PAI Wan 2.2 Fun base checkpoints split for ComfyUI Native/Kijai wrappers
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_control_high_noise_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.2_fun_control_high_noise_14B_bf16.safetensors"
-    download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_control_low_noise_14B_bf16.safetensors" "$DIFFUSION_MODELS_DIR/wan2.2_fun_control_low_noise_14B_bf16.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/Fun/Wan2_2-Fun-Control-A14B-HIGH_fp8_e4m3fn_scaled_KJ_fixed.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-Fun-Control-A14B-HIGH_fp8_e4m3fn_scaled_KJ_fixed.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/Fun/Wan2_2-Fun-Control-A14B-LOW_fp8_e4m3fn_scaled_KJ_fixed.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-Fun-Control-A14B-LOW_fp8_e4m3fn_scaled_KJ_fixed.safetensors"
 fi
 
 # 2. Dedicated Wan 2.2 ControlNet Adapters
 if [ "${DOWNLOAD_WAN_CONTROLNETS:-}" = "true" ]; then
-    echo "📥 Downloading Dedicated Wan 2.2 ControlNet Adapters..."
+    echo "📥 Downloading Wan 2.2 ControlNet adapters..."
 
     # TheDenk Verified Wan 2.2 14B Depth ControlNet
     download_model "https://huggingface.co/TheDenk/wan2.2-t2v-a14b-controlnet-depth-v1/resolve/main/diffusion_pytorch_model.safetensors" "$CONTROLNET_DIR/wan2.2_t2v_a14b_controlnet_depth_v1.safetensors"
@@ -578,45 +611,18 @@ if [ "${DOWNLOAD_WAN_CONTROLNETS:-}" = "true" ]; then
 fi
 
 # ============================================================
-# WAN 2.2 PERFORMANCE ENGINE & LORAS
+# WAN 2.2 TEXT ENCODER, VAE & OTHER ASSETS
 # ============================================================
 
-if [ "${DOWNLOAD_WAN22:-}" = "true" ]; then
-    echo "📥 Injecting Wan 2.2 Lightning & SVI Math Optimizations..."
-
-    # 4-Step Lightning Matrix T2V
-    download_model "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/high_noise_model.safetensors" "$LORAS_DIR/t2v_lightx2v_high_noise_model.safetensors"
-    download_model "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-T2V-A14B-4steps-lora-rank64-Seko-V1.1/low_noise_model.safetensors" "$LORAS_DIR/t2v_lightx2v_low_noise_model.safetensors"
-
-    # 4-Step Lightning Matrix I2V (Lightx2v variant)
-    download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors" "$LORAS_DIR/i2v_lightx2v_high_noise_model.safetensors"
-    download_model "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors" "$LORAS_DIR/i2v_lightx2v_low_noise_model.safetensors"
-
-    # Alternative I2V Step-Distill Models (Kijai Comfy Variant)
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors" "$LORAS_DIR/Wan_2_2_I2V_A14B_HIGH_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Wan22_Lightx2v/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors" "$LORAS_DIR/Wan_2_2_I2V_A14B_LOW_lightx2v_4step_lora_260412_rank_64_fp16.safetensors"
-
-    # Stable Video Infinity v2 PRO Modules
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors"
-    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/Stable-Video-Infinity/v2.0/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors" "$LORAS_DIR/SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors"
-
-    # CivitAI Community Enhanced Models
-    download_model "https://civitai.red/api/download/models/2609141?type=Model&format=SafeTensor&size=full&fp=fp16" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8H.safetensors"
-    download_model "https://civitai.red/api/download/models/2609148?type=Model&format=SafeTensor&size=full&fp=fp8" "$DIFFUSION_MODELS_DIR/wan22EnhancedNSFWSVICamera_nolightningSVICfFp8L.safetensors"
-fi
-
-# ============================================================
-# WAN 2.2 TEXT ENCODERS VAE & GLUE ASSETS
-# ============================================================
-
-if [ "${DOWNLOAD_WAN22:-}" = "true" ] || [ "${DOWNLOAD_WAN_ANIMATE:-}" = "true" ] || [ "${DOWNLOAD_WAN_S2V:-}" = "true" ]; then
-    echo "📥 Downloading Wan VAE, Text Encoders and Clip Vision Arrays..."
-    download_model "https://huggingface.co/zootkitty/nsfw_wan_umt5-xxl_bf16_fixed/resolve/main/nsfw_wan_umt5-xxl_bf16_fixed.safetensors" "$TEXT_ENCODERS_DIR/nsfw_wan_umt5-xxl_bf16_fixed.safetensors"
+if [ "${DOWNLOAD_WAN22_T2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN22_I2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN22_ENHANCED_NSFW_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_ANIMATE_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_S2V_FP8:-}" = "true" ] || [ "${DOWNLOAD_WAN_FUN_CONTROL_FP8:-}" = "true" ]; then
+    echo "📥 Downloading Wan VAE, text encoder and clip vision arrays..."
+    download_model "https://huggingface.co/NSFW-API/NSFW-Wan-UMT5-XXL/resolve/main/nsfw_wan_umt5-xxl_fp8_scaled.safetensors" "$TEXT_ENCODERS_DIR/nsfw_wan_umt5-xxl_fp8_scaled.safetensors"
     download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors" "$TEXT_ENCODERS_DIR/open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors"
     download_model "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors" "$CLIP_VISION_DIR/clip_vision_h.safetensors"
     download_model "https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/Wan2_1_VAE_bf16.safetensors" "$VAE_DIR/Wan2_1_VAE_bf16.safetensors"
+    download_model "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/taew2_2.safetensors" "$VAE_DIR/taew2_2.safetensors"
 
-    echo "✅ WAN 2.2 infrastructure verification complete"
+    echo "📋 Wan 2.2 pipeline queued for background download"
 fi
 
 # ==========================================
@@ -641,7 +647,7 @@ if [ "${DOWNLOAD_JOYCAPTION:-}" = "true" ]; then
     download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/model-00003-of-00004.safetensors" "$JOYCAPTION_DIR/model-00003-of-00004.safetensors"
     download_model "https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava/resolve/main/model-00004-of-00004.safetensors" "$JOYCAPTION_DIR/model-00004-of-00004.safetensors"
 
-    echo "✅ JoyCaption Beta One model downloads scheduled"
+    echo "📋 JoyCaption Beta One model queued for background download"
 fi
 
 # ==========================================
@@ -685,7 +691,7 @@ if [ "${DOWNLOAD_FLORENCE2:-}" = "true" ]; then
         echo "⚠️ WARNING: LayerStyle advance folder not found at $LAYERSTYLE_MODELS_DIR. Patch skipped."
     fi
 
-    echo "✅ Florence-2 NSFW scheduled"
+    echo "📋 Florence-2 NSFW model queued for background download"
 fi
 
 # ==========================================
@@ -785,6 +791,8 @@ download_model "https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-ada
 
 # SDXL Face Plus (Great for high-res base images before Wan I2V)
 download_model "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors" "$IPADAPTER_DIR/ip-adapter-plus-face_sdxl_vit-h.safetensors"
+
+echo "📋 Dependency weights queued for background download"
 
 if [ ! -f "$ULTRALYTICS_DIR/bbox/Eyes.pt" ]; then
     if [ -f "/Eyes.pt" ]; then
@@ -1061,17 +1069,6 @@ VRAM_THRESHOLD=32000 # 32GB in MB
 # Start with base flags
 LAUNCH_FLAGS="--listen --preview-method auto"
 
-# Add FP8 flags if enabled
-if [ "${USE_FP8_TEXT_ENC:-true}" = "true" ]; then
-    LAUNCH_FLAGS="$LAUNCH_FLAGS --fp8_e4m3fn-text-enc"
-    status_msg "FP8 text encoder enabled"
-fi
-
-if [ "${USE_FP8_MODEL:-}" = "true" ]; then
-    LAUNCH_FLAGS="$LAUNCH_FLAGS --fp8_e4m3fn-unet"
-    status_msg "FP8 model weight casting enabled (E4M3FN)"
-fi
-
 # Memory Optimization based on VRAM
 if [ "$GPU_VRAM_MB" -ge "$VRAM_THRESHOLD" ]; then
     echo "🚀 High VRAM detected (32GB+). Enabling --highvram."
@@ -1127,14 +1124,6 @@ VRAM_THRESHOLD=32000
 BASE_FLAGS="--listen --preview-method auto"
 
 # Seamlessly check variable states inside the live shell container
-if [ "${USE_FP8_TEXT_ENC:-true}" = "true" ]; then
-    BASE_FLAGS="$BASE_FLAGS --fp8_e4m3fn-text-enc"
-fi
-
-if [ "${USE_FP8_MODEL:-}" = "true" ]; then
-    BASE_FLAGS="$BASE_FLAGS --fp8_e4m3fn-unet"
-fi
-
 if [ "$GPU_VRAM_MB" -ge "$VRAM_THRESHOLD" ]; then
     BASE_FLAGS="$BASE_FLAGS --highvram"
 fi

@@ -9,8 +9,8 @@ This heavyweight template is engineered as a self healing container. To prevent 
 
 ### 🔄 How to Safely Update Nodes
 You do not need to update anything manually. This image features a **Smart Boot-Time Synchronizer**:
-1. Every time you restart or boot the container, the backend script scans your persistent storage volume.
-2. It automatically pulls the latest `git` commits for all your custom nodes.
+1. Every time you restart or boot the container, the backend script scans your storage volume.
+2. It automatically pulls the latest `git` commits for all custom nodes.
 3. If a node requires new dependencies, the custom compiler intercepts the `requirements.txt`, sanitizes the version pins to match the environment, and updates them safely.
 
 ### 📦 How to add other custom nodes:
@@ -38,10 +38,6 @@ use the live-debugger utility via your SSH terminal:
 ```bash
 comfyui-restart
 ```
-Bypass a specific flag dynamically (e.g., disable FP8 text encoding for testing):
-```bash
-USE_FP8_TEXT_ENC=false comfyui-restart
-```
 Append completely custom troubleshooting or memory optimization flags on the fly:
 ```bash
 comfyui-restart --disable-smart-memory --lowvram
@@ -49,28 +45,26 @@ comfyui-restart --disable-smart-memory --lowvram
 
 ### Deploy
 - RunPod  - https://tinyurl.com/327m5d3t
-- Vast.ai - https://tinyurl.com/yv4ncbr4
+- Vast.ai - https://tinyurl.com/bdz39n6e
 
 ### Variables Selection
 
-Set the models you want to download to `true`. LTX GGUF is Q8.
+Set the models you want to download to `true`.
+Wan 2.2 weights are fp8_e4m3fn. LTX 2.3 dev - mxfp8 and GGUF Q8, distilled lora included.
+The enhanced version is the SVI with no lightning support. The standard Wan downloads come with many lightning loras.
+Text encoders for both models are fp8. Controlnets are Depth and HED.
 
 ```env
-DOWNLOAD_LTX23=""
-DOWNLOAD_LTX23_GGUF=""
-DOWNLOAD_WAN22=""
-DOWNLOAD_WAN_ANIMATE=""
-DOWNLOAD_WAN_S2V=""
-DOWNLOAD_WAN_FUN_CONTROL=""
+DOWNLOAD_LTX23_DEV_MXFP8=""
+DOWNLOAD_LTX23_DEV_GGUF_Q8=""
+DOWNLOAD_WAN22_FP8=""
+DOWNLOAD_WAN22_ENHANCED_NSFW_FP8=""
+DOWNLOAD_WAN_ANIMATE_FP8=""
+DOWNLOAD_WAN_S2V_FP8=""
+DOWNLOAD_WAN_FUN_CONTROL_FP8=""
 DOWNLOAD_WAN_CONTROLNETS=""
 ```
 
-ComfyUI is set to pass the text encoder with fp8 flag by default, if you don't want
-that set the following flag to `false`. Optionally you can enable FP8 for the UNET.
-```env
-USE_FP8_TEXT_ENC=""
-USE_FP8_MODEL=""
-```
 In addition to the Qwen-VL video captioner you have the following other NSFW friendly captioners
 JoyCaption Beta One & Florence nsfw v2:
 ```env
@@ -144,7 +138,6 @@ See [LICENSE](LICENSE) for full terms.
 - ComfyUI-Detail-Daemon
 - ComfyUI-WanVideoWrapper
 - ComfyUI-WanAnimatePreprocess
-- ComfyUI-SCAIL-Pose
 - ComfyUI-FSampler
 - ComfyUI-WanMoEScheduler
 - ComfyUI-VAE-Utils
