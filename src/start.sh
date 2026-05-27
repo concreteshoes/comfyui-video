@@ -489,7 +489,7 @@ if [ "${DOWNLOAD_LTX23_DEV_MXFP8:-}" = "true" ]; then
 fi
 
 if [ "${DOWNLOAD_LTX23_DEV_GGUF_Q8:-}" = "true" ]; then
-    echo "📥 Downloading LTX 2.3 dev GGUF (Q8) & dependencies..."
+    echo "📥 Downloading LTX 2.3 dev GGUF Q8 & dependencies..."
     download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/ltx-2.3-22b-dev-Q8_0.gguf" "$GGUF_DIR/ltx-2.3-22b-dev-Q8_0.gguf"
     download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/text_encoders/ltx-2.3-22b-dev_embeddings_connectors.safetensors" "$TEXT_ENCODERS_DIR/ltx-2.3-22b-dev_embeddings_connectors.safetensors"
 
@@ -523,7 +523,7 @@ fi
 # ============================================================
 
 if [ "${DOWNLOAD_WAN22_T2V_FP8:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 t2v fp8_e4m3fn models..."
+    echo "📥 Downloading Wan 2.2 t2v fp8_e4m3fn_scaled models..."
     download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/T2V/Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-T2V-A14B_HIGH_fp8_e4m3fn_scaled_KJ.safetensors"
     download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/T2V/Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-T2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors"
 
@@ -535,7 +535,7 @@ if [ "${DOWNLOAD_WAN22_T2V_FP8:-}" = "true" ]; then
 fi
 
 if [ "${DOWNLOAD_WAN22_I2V_FP8:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 i2v fp8_e4m3fn models..."
+    echo "📥 Downloading Wan 2.2 i2v fp8_e4m3fn_scaled models..."
     download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/I2V/Wan2_2-I2V-A14B-HIGH_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-I2V-A14B-HIGH_fp8_e4m3fn_scaled_KJ.safetensors"
     download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/I2V/Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors"
 
@@ -565,7 +565,7 @@ fi
 # ============================================================
 
 if [ "${DOWNLOAD_WAN_ANIMATE_FP8:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 Animate model & infrastructure..."
+    echo "📥 Downloading Wan 2.2 Animate fp8_scaled_e4m3fn model & infrastructure..."
     download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/Wan22Animate/Wan2_2-Animate-14B_fp8_scaled_e4m3fn_KJ_v2.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-Animate-14B_fp8_scaled_e4m3fn_KJ_v2.safetensors"
     download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_animate_14B_relight_lora_bf16.safetensors" "$LORAS_DIR/wan2.2_animate_14B_relight_lora_bf16.safetensors"
 
@@ -581,7 +581,7 @@ fi
 # ============================================================
 
 if [ "${DOWNLOAD_WAN_S2V_FP8:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 S2V lip-sync layers..."
+    echo "📥 Downloading Wan 2.2 S2V fp8_e4m3fn_scaled lip-sync layers..."
     download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/S2V/Wan2_2-S2V-14B_fp8_e4m3fn_scaled_KJ.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-S2V-14B_fp8_e4m3fn_scaled_KJ.safetensors"
     download_model "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors" "$AUDIO_ENCODERS_DIR/wav2vec2_large_english_fp16.safetensors"
 fi
@@ -592,7 +592,7 @@ fi
 
 # 1. Wan 2.2 Fun Control Engine (Native Multi-Modal Pose/Depth/Canny Base)
 if [ "${DOWNLOAD_WAN_FUN_CONTROL_FP8:-}" = "true" ]; then
-    echo "📥 Downloading Wan 2.2 fp8 Fun Control models..."
+    echo "📥 Downloading Wan 2.2 fp8 Fun Control fp8_e4m3fn_scaled models..."
 
     # Official Alibaba PAI Wan 2.2 Fun base checkpoints split for ComfyUI Native/Kijai wrappers
     download_model "https://huggingface.co/Kijai/WanVideo_comfy_fp8_scaled/resolve/main/Fun/Wan2_2-Fun-Control-A14B-HIGH_fp8_e4m3fn_scaled_KJ_fixed.safetensors" "$DIFFUSION_MODELS_DIR/Wan2_2-Fun-Control-A14B-HIGH_fp8_e4m3fn_scaled_KJ_fixed.safetensors"
@@ -1069,6 +1069,17 @@ VRAM_THRESHOLD=32000 # 32GB in MB
 # Start with base flags
 LAUNCH_FLAGS="--listen --preview-method auto"
 
+# Add FP8 flags if enabled
+#if [ "${USE_FP8_TEXT_ENC:-true}" = "true" ]; then
+#    LAUNCH_FLAGS="$LAUNCH_FLAGS --fp8_e4m3fn-text-enc"
+#    status_msg "FP8 text encoder enabled"
+#fi
+
+#if [ "${USE_FP8_MODEL:-}" = "true" ]; then
+#    LAUNCH_FLAGS="$LAUNCH_FLAGS --fp8_e4m3fn-unet"
+#    status_msg "FP8 model weight casting enabled (E4M3FN)"
+#fi
+
 # Memory Optimization based on VRAM
 if [ "$GPU_VRAM_MB" -ge "$VRAM_THRESHOLD" ]; then
     echo "🚀 High VRAM detected (32GB+). Enabling --highvram."
@@ -1122,6 +1133,17 @@ GPU_VRAM_MB=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 
 VRAM_THRESHOLD=32000
 
 BASE_FLAGS="--listen --preview-method auto"
+
+# Add FP8 flags if enabled
+#if [ "${USE_FP8_TEXT_ENC:-true}" = "true" ]; then
+#    LAUNCH_FLAGS="$LAUNCH_FLAGS --fp8_e4m3fn-text-enc"
+#    status_msg "FP8 text encoder enabled"
+#fi
+
+#if [ "${USE_FP8_MODEL:-}" = "true" ]; then
+#    LAUNCH_FLAGS="$LAUNCH_FLAGS --fp8_e4m3fn-unet"
+#    status_msg "FP8 model weight casting enabled (E4M3FN)"
+#fi
 
 # Seamlessly check variable states inside the live shell container
 if [ "$GPU_VRAM_MB" -ge "$VRAM_THRESHOLD" ]; then
