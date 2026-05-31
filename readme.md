@@ -45,18 +45,18 @@ comfyui-restart --disable-smart-memory --lowvram
 
 ### Deploy
 - RunPod  - https://tinyurl.com/327m5d3t
-- Vast.ai - https://tinyurl.com/bdfshpns
+- Vast.ai - https://tinyurl.com/2uzb866f
 
 ### Variables Selection
 
 Set the models you want to download to `true`.
-Wan 2.2 weights are fp8_e4m3fn. LTX 2.3 dev - mxfp8 and GGUF Q8, distilled lora included.
+Wan 2.2 weights are fp8_e4m3fn. LTX 2.3 dev - mxfp8 and GGUF Q6_K, distilled lora included.
 The enhanced version is the SVI with no lightning support. The standard Wan downloads come with many lightning loras.
 Text encoders for both models are fp8. Controlnets are Depth and HED.
 
 ```env
 DOWNLOAD_LTX23_DEV_MXFP8=""
-DOWNLOAD_LTX23_DEV_GGUF_Q8=""
+DOWNLOAD_LTX23_DEV_GGUF_Q6_K=""
 DOWNLOAD_WAN22_T2V_FP8=""
 DOWNLOAD_WAN22_I2V_FP8=""
 DOWNLOAD_WAN22_SVI_NSFW_FP8=""

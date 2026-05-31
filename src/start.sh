@@ -488,20 +488,20 @@ if [ "${DOWNLOAD_LTX23_DEV_MXFP8:-}" = "true" ]; then
     download_model "https://huggingface.co/Kijai/LTX2.3_comfy/resolve/main/vae/taeltx2_3.safetensors" "$VAE_DIR/taeltx2_3.safetensors"
 fi
 
-if [ "${DOWNLOAD_LTX23_DEV_GGUF_Q8:-}" = "true" ]; then
-    echo "📥 Downloading LTX 2.3 dev GGUF Q8 & dependencies..."
-    download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/ltx-2.3-22b-dev-Q8_0.gguf" "$GGUF_DIR/ltx-2.3-22b-dev-Q8_0.gguf"
+if [ "${DOWNLOAD_LTX23_DEV_GGUF_Q6_K:-}" = "true" ]; then
+    echo "📥 Downloading LTX 2.3 dev GGUF Q6_K & dependencies..."
+    download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/ltx-2.3-22b-dev-Q6_K.gguf" "$GGUF_DIR/ltx-2.3-22b-dev-Q6_K.gguf"
     download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/text_encoders/ltx-2.3-22b-dev_embeddings_connectors.safetensors" "$TEXT_ENCODERS_DIR/ltx-2.3-22b-dev_embeddings_connectors.safetensors"
 
     # Download text encoder
-    download_model "https://huggingface.co/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-UD-Q8_K_XL.gguf" "$TEXT_ENCODERS_DIR/gemma-3-12b-it-UD-Q8_K_XL.gguf"
+    download_model "https://huggingface.co/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-UD-Q6_K_XL.gguf" "$TEXT_ENCODERS_DIR/gemma-3-12b-it-UD-Q6_K_XL.gguf"
 
     #Download the VAE
     download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/vae/ltx-2.3-22b-dev_audio_vae.safetensors" "$VAE_DIR/ltx-2.3-22b-dev_audio_vae.safetensors"
     download_model "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/main/vae/ltx-2.3-22b-dev_video_vae.safetensors" "$VAE_DIR/ltx-2.3-22b-dev_video_vae.safetensors"
 fi
 
-if [ "${DOWNLOAD_LTX23_DEV_MXFP8:-}" = "true" ] || [ "${DOWNLOAD_LTX23_DEV_GGUF_Q8:-}" = "true" ]; then
+if [ "${DOWNLOAD_LTX23_DEV_MXFP8:-}" = "true" ] || [ "${DOWNLOAD_LTX23_DEV_GGUF_Q6_K:-}" = "true" ]; then
     echo "📥 Downloading shared LTX 2.3 loras and upscalers..."
 
     # Download distilled loras
