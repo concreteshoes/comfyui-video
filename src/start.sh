@@ -258,10 +258,9 @@ FB_DB="$NETWORK_VOLUME/filebrowser.db"
 # 1. Initialize configuration only if it's a brand new volume
 if [ ! -f "$FB_DB" ]; then
     echo "Creating a fresh Filebrowser database..."
-    filebrowser -d "$FB_DB" config init
-
-    # Hardcoded user to "admin", fallback password to "default_password" if env is missing
-    filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin
+    filebrowser -d "$FB_DB" config init > /dev/null 2>&1
+    filebrowser -d "$FB_DB" config set --auth.minPasswordLength 0 > /dev/null 2>&1
+    filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin > /dev/null 2>&1
 fi
 
 # 2. Start Filebrowser in the background
