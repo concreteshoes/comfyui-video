@@ -255,7 +255,6 @@ jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
 # Ensure the database file path is clean
 FB_DB="$NETWORK_VOLUME/filebrowser.db"
 
-# 1. Initialize configuration only if it's a brand new volume
 if [ ! -f "$FB_DB" ]; then
     echo "Creating a fresh Filebrowser database..."
     filebrowser -d "$FB_DB" config init > /dev/null 2>&1
@@ -263,8 +262,10 @@ if [ ! -f "$FB_DB" ]; then
     filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin > /dev/null 2>&1
 fi
 
-# 2. Start Filebrowser in the background
-echo "Launching Filebrowser on port 8080..."
+# FORCE BYPASS MODE: Run this outside the IF block to ensure old DBs stay unlocked!
+filebrowser -d "$FB_DB" config set --auth.method noauth > /dev/null 2>&1
+
+# Start the server background process
 filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$NETWORK_VOLUME/filebrowser.log" 2>&1 &
 
 # Define base paths
