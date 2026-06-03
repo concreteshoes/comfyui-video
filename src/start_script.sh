@@ -15,7 +15,9 @@ fi
 
 # Export environment variables
 extract_env() {
-    local pattern="$1"
+    # 1. Unified pattern matching your template's specific variables
+    local pattern="^(DOWNLOAD_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|SSH_PUBLIC_KEY|FB_PASSWORD|.*_TO_DOWNLOAD)$"
+    local search_pattern="DOWNLOAD_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|SSH_PUBLIC_KEY|FB_PASSWORD|.*_TO_DOWNLOAD"
 
     mkdir -p /etc/profile.d
     : > /etc/profile.d/container_env.sh
@@ -23,33 +25,45 @@ extract_env() {
     echo "=== Searching for env source ==="
 
     local env_file=""
-    for pid in /proc/[0-9]*; do
-        if tr '\0' '\n' < "$pid/environ" 2> /dev/null | grep -E -q "DOWNLOAD_.*|USE_FP8_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|SSH_PUBLIC_KEY"; then
-            env_file="$pid/environ"
-            echo "Using env from $pid"
-            break
-        fi
-    done
 
-    if [ -z "$env_file" ]; then
-        echo "No env source found!"
-        return
+    # Optimization: Target PID 1 (main container process) first to avoid race conditions
+    if [ -r "/proc/1/environ" ] && tr '\0' '\n' < "/proc/1/environ" | grep -E -q "$search_pattern"; then
+        env_file="/proc/1/environ"
+        echo "Using env from PID 1"
+    else
+        # Fallback loop if PID 1 is restricted or missing variables
+        for pid in /proc/[0-9]*; do
+            if [ -r "$pid/environ" ] && [ "$pid" != "/proc/$$" ] && [ "$pid" != "/proc/1" ]; then
+                if tr '\0' '\n' < "$pid/environ" 2> /dev/null | grep -E -q "$search_pattern"; then
+                    env_file="$pid/environ"
+                    echo "Using env from $pid"
+                    break
+                fi
+            fi
+        done
     fi
 
-    while IFS='=' read -r key value; do
-        if [[ "$key" =~ ^($pattern)$ ]]; then
-            echo "Exporting: $key"
+    if [ -z "$env_file" ] || [ ! -r "$env_file" ]; then
+        echo "No valid env source found!"
+        return 1
+    fi
 
+    # 2. Extract and securely parse variables
+    while IFS= read -r line || [ -n "$line" ]; do
+        [[ -z "$line" ]] && continue
+
+        key="${line%%=*}"
+        value="${line#*=}"
+
+        if [[ "$key" =~ $pattern ]]; then
+            echo "Exporting: $key"
             export "$key=$value"
             printf 'export %s=%q\n' "$key" "$value" >> /etc/profile.d/container_env.sh
         fi
-    done < <(tr '\0' '\n' < "$env_file")
-
-    chmod +x /etc/profile.d/container_env.sh
+    done < <(tr '\0' '\n' < "$env_file" 2> /dev/null)
 }
 
-extract_env "DOWNLOAD_.*|USE_FP8_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|SSH_PUBLIC_KEY"
-chmod +x /etc/profile.d/container_env.sh
+extract_env
 
 echo "Waiting for internet connectivity..."
 MAX_RETRIES=30
