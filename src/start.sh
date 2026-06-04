@@ -252,21 +252,33 @@ jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --ServerApp.allow_origin='*' --ServerApp.allow_credentials=True \
     --notebook-dir="$NETWORK_VOLUME" &
 
-# Ensure the database file path is clean
+# Define precise paths
 FB_DB="$NETWORK_VOLUME/filebrowser.db"
+FB_LOG="$NETWORK_VOLUME/filebrowser.log"
 
+# 1. Self-Healing: Clear any ghost processes or lingering SQLite locks
+pkill -f filebrowser || true
+rm -f "${FB_DB}-journal"
+
+# 2. Establish fallback password safety
+FINAL_PASS="${FB_PASSWORD:-default_password}"
+
+# 3. Database initialization and routing enforcement
 if [ ! -f "$FB_DB" ]; then
     echo "Creating a fresh Filebrowser database..."
-    filebrowser -d "$FB_DB" config init > /dev/null 2>&1
-    filebrowser -d "$FB_DB" config set --auth.minPasswordLength 0 > /dev/null 2>&1
-    filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-default_password}" --perm.admin > /dev/null 2>&1
+    filebrowser -d "$FB_DB" config init
+    filebrowser -d "$FB_DB" config set --auth.minPasswordLength 0
+    filebrowser -d "$FB_DB" config set --auth.method json
+    filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin
+else
+    echo "Existing volume database found. Enforcing standard JSON routing..."
+    # This prevents old, broken database states from hijacking your fresh instance
+    filebrowser -d "$FB_DB" config set --auth.method json || true
+    filebrowser -d "$FB_DB" users update admin -p "$FINAL_PASS" || true
 fi
 
-# FORCE BYPASS MODE: Run this outside the IF block to ensure old DBs stay unlocked!
-filebrowser -d "$FB_DB" config set --auth.method noauth > /dev/null 2>&1
-
-# Start the server background process
-filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$NETWORK_VOLUME/filebrowser.log" 2>&1 &
+# 4. Launch the background daemon cleanly
+filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$FB_LOG" 2>&1 &
 
 # Define base paths
 COMFYUI_DIR="$NETWORK_VOLUME/ComfyUI"
