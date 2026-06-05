@@ -266,15 +266,16 @@ FINAL_PASS="${FB_PASSWORD:-default_password}"
 # 3. Database initialization and routing enforcement
 if [ ! -f "$FB_DB" ]; then
     echo "Creating a fresh Filebrowser database..."
-    filebrowser -d "$FB_DB" config init
-    filebrowser -d "$FB_DB" config set --auth.minPasswordLength 0
-    filebrowser -d "$FB_DB" config set --auth.method json
-    filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin
+    # Quietly initialize and configure to prevent console flooding
+    filebrowser -d "$FB_DB" config init > /dev/null 2>&1
+    filebrowser -d "$FB_DB" config set --minimumPasswordLength 0 > /dev/null 2>&1
+    filebrowser -d "$FB_DB" config set --auth.method json > /dev/null 2>&1
+    filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin > /dev/null 2>&1
 else
     echo "Existing volume database found. Enforcing standard JSON routing..."
-    # This prevents old, broken database states from hijacking your fresh instance
-    filebrowser -d "$FB_DB" config set --auth.method json || true
-    filebrowser -d "$FB_DB" users update admin -p "$FINAL_PASS" || true
+    # Quietly update existing environments
+    filebrowser -d "$FB_DB" config set --auth.method json > /dev/null 2>&1 || true
+    filebrowser -d "$FB_DB" users update admin -p "$FINAL_PASS" > /dev/null 2>&1 || true
 fi
 
 # 4. Launch the background daemon cleanly
