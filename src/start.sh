@@ -253,8 +253,8 @@ jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --notebook-dir="$NETWORK_VOLUME" &
 
 # Define precise paths
-FB_DB="$NETWORK_VOLUME/lora-trainer/filebrowser.db"
-FB_LOG="$NETWORK_VOLUME/lora-trainer/filebrowser.log"
+FB_DB="$NETWORK_VOLUME/comfyui-video/filebrowser.db"
+FB_LOG="$NETWORK_VOLUME/comfyui-video/filebrowser.log"
 
 # 1. Self-Healing: Clear any ghost processes or lingering locks
 pkill -f filebrowser || true
