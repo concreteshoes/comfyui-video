@@ -253,10 +253,10 @@ jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --notebook-dir="$NETWORK_VOLUME" &
 
 # Define precise paths
-FB_DB="$NETWORK_VOLUME/filebrowser.db"
-FB_LOG="$NETWORK_VOLUME/filebrowser.log"
+FB_DB="$NETWORK_VOLUME/lora-trainer/filebrowser.db"
+FB_LOG="$NETWORK_VOLUME/lora-trainer/filebrowser.log"
 
-# 1. Self-Healing: Clear any ghost processes or lingering SQLite locks
+# 1. Self-Healing: Clear any ghost processes or lingering locks
 pkill -f filebrowser || true
 rm -f "${FB_DB}-journal"
 
@@ -266,16 +266,28 @@ FINAL_PASS="${FB_PASSWORD:-default_password}"
 # 3. Database initialization and routing enforcement
 if [ ! -f "$FB_DB" ]; then
     echo "Creating a fresh Filebrowser database..."
-    # Quietly initialize and configure to prevent console flooding
+    # Initialize basic DB configuration
     filebrowser -d "$FB_DB" config init > /dev/null 2>&1
     filebrowser -d "$FB_DB" config set --minimumPasswordLength 0 > /dev/null 2>&1
-    filebrowser -d "$FB_DB" config set --auth.method json > /dev/null 2>&1
+
+    # BYPASS LOGIN: Use 'noauth' instead of 'json' to disable the login screen entirely
+    filebrowser -d "$FB_DB" config set --auth.method noauth > /dev/null 2>&1
+
+    # Create the admin user (used internally by Filebrowser even under noauth)
     filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin > /dev/null 2>&1
 else
-    echo "Existing volume database found. Enforcing standard JSON routing..."
-    # Quietly update existing environments
-    filebrowser -d "$FB_DB" config set --auth.method json > /dev/null 2>&1 || true
-    filebrowser -d "$FB_DB" users update admin -p "$FINAL_PASS" > /dev/null 2>&1 || true
+    echo "Existing volume database found. Syncing deployment settings..."
+
+    # Enforce bypass logic on existing databases
+    filebrowser -d "$FB_DB" config set --auth.method noauth > /dev/null 2>&1 || true
+
+    # Check if admin user is missing, create if necessary, update password if it exists
+    if ! filebrowser -d "$FB_DB" users find admin > /dev/null 2>&1; then
+        filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin > /dev/null 2>&1
+    else
+        # FIX: Changed broken '-p' flag to explicit '--password' flag
+        filebrowser -d "$FB_DB" users update admin --password "$FINAL_PASS" > /dev/null 2>&1 || true
+    fi
 fi
 
 # 4. Launch the background daemon cleanly
