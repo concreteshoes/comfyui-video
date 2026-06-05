@@ -256,41 +256,20 @@ jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
 FB_DB="$NETWORK_VOLUME/comfyui-video/filebrowser.db"
 FB_LOG="$NETWORK_VOLUME/comfyui-video/filebrowser.log"
 
-# 1. Self-Healing: Clear any ghost processes or lingering locks
+# 1. Kill any ghost processes
 pkill -f filebrowser || true
-rm -f "${FB_DB}-journal"
 
-# 2. Establish fallback password safety
+# 2. Always wipe the DB so config is never stale
+rm -f "$FB_DB" "${FB_DB}-journal"
+
+# 3. Build a fresh DB with noauth every time
 FINAL_PASS="${FB_PASSWORD:-default_password}"
+filebrowser -d "$FB_DB" config init
+filebrowser -d "$FB_DB" config set --auth.method noauth
+filebrowser -d "$FB_DB" config set --minimumPasswordLength 0
+filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin
 
-# 3. Database initialization and routing enforcement
-if [ ! -f "$FB_DB" ]; then
-    echo "Creating a fresh Filebrowser database..."
-    # Initialize basic DB configuration
-    filebrowser -d "$FB_DB" config init > /dev/null 2>&1
-    filebrowser -d "$FB_DB" config set --minimumPasswordLength 0 > /dev/null 2>&1
-
-    # BYPASS LOGIN: Use 'noauth' instead of 'json' to disable the login screen entirely
-    filebrowser -d "$FB_DB" config set --auth.method noauth > /dev/null 2>&1
-
-    # Create the admin user (used internally by Filebrowser even under noauth)
-    filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin > /dev/null 2>&1
-else
-    echo "Existing volume database found. Syncing deployment settings..."
-
-    # Enforce bypass logic on existing databases
-    filebrowser -d "$FB_DB" config set --auth.method noauth > /dev/null 2>&1 || true
-
-    # Check if admin user is missing, create if necessary, update password if it exists
-    if ! filebrowser -d "$FB_DB" users find admin > /dev/null 2>&1; then
-        filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin > /dev/null 2>&1
-    else
-        # FIX: Changed broken '-p' flag to explicit '--password' flag
-        filebrowser -d "$FB_DB" users update admin --password "$FINAL_PASS" > /dev/null 2>&1 || true
-    fi
-fi
-
-# 4. Launch the background daemon cleanly
+# 4. Launch
 filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$FB_LOG" 2>&1 &
 
 # Define base paths
