@@ -48,8 +48,9 @@ extract_env() {
         return 1
     fi
 
-    # 2. Extract and securely parse variables
-    while IFS= read -r line || [ -n "$line" ]; do
+    # 2. Extract and securely parse variables using null delimiters (\0)
+    # This prevents corruption of complex URLs, multi-line tokens, and keys containing special characters
+    while IFS= read -r -d '' line; do
         [[ -z "$line" ]] && continue
 
         key="${line%%=*}"
@@ -57,10 +58,14 @@ extract_env() {
 
         if [[ "$key" =~ $pattern ]]; then
             echo "Exporting: $key"
-            export "$key=$value"
+
+            # Export to current shell context safely with defensive quoting
+            export "$key"="$value"
+
+            # Persist safely for any future SSH sessions (handles strings with special formatting perfectly)
             printf 'export %s=%q\n' "$key" "$value" >> /etc/profile.d/container_env.sh
         fi
-    done < <(tr '\0' '\n' < "$env_file" 2> /dev/null)
+    done < "$env_file"
 }
 
 extract_env
