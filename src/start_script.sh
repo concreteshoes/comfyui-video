@@ -16,8 +16,8 @@ fi
 # Export environment variables
 extract_env() {
     # 1. Unified pattern matching your template's specific variables
-    local pattern="^(DOWNLOAD_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|SSH_PUBLIC_KEY|FB_PASSWORD|.*_TO_DOWNLOAD)$"
-    local search_pattern="DOWNLOAD_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|SSH_PUBLIC_KEY|FB_PASSWORD|.*_TO_DOWNLOAD"
+    local pattern="^(DOWNLOAD_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|FB_PASSWORD|.*_TO_DOWNLOAD|SSH_PUBLIC_KEY)$"
+    local search_pattern="DOWNLOAD_.*|CIVITAI_TOKEN|HUGGINGFACE_API_KEY|FB_PASSWORD|.*_TO_DOWNLOAD|SSH_PUBLIC_KEY"
 
     mkdir -p /etc/profile.d
     : > /etc/profile.d/container_env.sh
