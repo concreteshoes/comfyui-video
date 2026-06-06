@@ -259,18 +259,26 @@ FB_LOG="$NETWORK_VOLUME/comfyui-video/filebrowser.log"
 # 1. Kill any ghost processes
 pkill -f filebrowser || true
 
-# 2. Always wipe the DB so config is never stale
+# 2. Wipe stale DB
 rm -f "$FB_DB" "${FB_DB}-journal"
 
-# 3. Build a fresh DB with noauth every time
-FINAL_PASS="${FB_PASSWORD:-default_password}"
-filebrowser -d "$FB_DB" config init
-filebrowser -d "$FB_DB" config set --auth.method noauth
-filebrowser -d "$FB_DB" config set --minimumPasswordLength 0
-filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin
+FINAL_PASS="${FB_PASSWORD:-admin}"
 
-# 4. Launch
-filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 > "$FB_LOG" 2>&1 &
+# 3. Init fresh DB, set noauth — ONE config set call (avoids re-read/overwrite race)
+filebrowser -d "$FB_DB" config init
+filebrowser -d "$FB_DB" config set \
+    --auth.method noauth \
+    --address 0.0.0.0 \
+    --port 8080
+
+# 4. Create user — noauth ignores the password, but user ID=1 MUST exist
+#    If admin already exists (some builds pre-create it), update instead
+filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin 2> /dev/null \
+    || filebrowser -d "$FB_DB" users update admin --password "$FINAL_PASS" --perm.admin
+
+# 5. Launch
+filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 \
+    > "$FB_LOG" 2>&1 &
 
 # Define base paths
 COMFYUI_DIR="$NETWORK_VOLUME/ComfyUI"
