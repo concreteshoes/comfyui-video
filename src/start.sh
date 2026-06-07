@@ -250,11 +250,10 @@ echo "Starting JupyterLab in $NETWORK_VOLUME"
 jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
     --NotebookApp.token='' --NotebookApp.password='' \
     --ServerApp.allow_origin='*' --ServerApp.allow_credentials=True \
-    --notebook-dir="$NETWORK_VOLUME" &
+    --notebook-dir="$NETWORK_VOLUME" >> "$STARTUP_LOG" 2>&1 &
 
 # Define precise paths
 FB_DB="$NETWORK_VOLUME/comfyui-video/filebrowser.db"
-FB_LOG="$NETWORK_VOLUME/comfyui-video/filebrowser.log"
 
 # 1. Kill any ghost processes
 pkill -f filebrowser || true
@@ -262,23 +261,20 @@ pkill -f filebrowser || true
 # 2. Wipe stale DB
 rm -f "$FB_DB" "${FB_DB}-journal"
 
-FINAL_PASS="${FB_PASSWORD:-admin}"
-
 # 3. Init fresh DB, set noauth — ONE config set call (avoids re-read/overwrite race)
-filebrowser -d "$FB_DB" config init
+filebrowser -d "$FB_DB" config init > /dev/null 2>&1
 filebrowser -d "$FB_DB" config set \
-    --auth.method noauth \
     --address 0.0.0.0 \
-    --port 8080
+    --port 8080 \
+    --minimum-password-length 0 > /dev/null 2>&1
 
 # 4. Create user — noauth ignores the password, but user ID=1 MUST exist
 #    If admin already exists (some builds pre-create it), update instead
-filebrowser -d "$FB_DB" users add admin "$FINAL_PASS" --perm.admin 2> /dev/null \
-    || filebrowser -d "$FB_DB" users update admin --password "$FINAL_PASS" --perm.admin
+filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-admin}" --perm.admin > /dev/null 2>&1
 
 # 5. Launch
 filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 \
-    > "$FB_LOG" 2>&1 &
+    >> "$STARTUP_LOG" 2>&1 &
 
 # Define base paths
 COMFYUI_DIR="$NETWORK_VOLUME/ComfyUI"
