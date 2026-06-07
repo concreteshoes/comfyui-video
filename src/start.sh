@@ -261,18 +261,22 @@ pkill -f filebrowser || true
 # 2. Wipe stale DB
 rm -f "$FB_DB" "${FB_DB}-journal"
 
-# 3. Init fresh DB, set noauth — ONE config set call (avoids re-read/overwrite race)
+# 3. Init fresh DB
 filebrowser -d "$FB_DB" config init > /dev/null 2>&1
+
+# 4. Set configuration, explicitly lowering the minimum password length
 filebrowser -d "$FB_DB" config set \
     --address 0.0.0.0 \
     --port 8080 \
-    --minimum-password-length 0 > /dev/null 2>&1
+    --minimumPasswordLength 1 > /dev/null 2>&1
 
-# 4. Create user — noauth ignores the password, but user ID=1 MUST exist
-#    If admin already exists (some builds pre-create it), update instead
-filebrowser -d "$FB_DB" users add admin "${FB_PASSWORD:-admin}" --perm.admin > /dev/null 2>&1
+# 5. Create user with the raw, unpadded password
+RAW_PASS="${FB_PASSWORD:-admin}"
 
-# 5. Launch
+filebrowser -d "$FB_DB" users add admin "$RAW_PASS" --perm.admin > /dev/null 2>&1 \
+    || filebrowser -d "$FB_DB" users update admin --password "$RAW_PASS" --perm.admin > /dev/null 2>&1
+
+# 6. Launch
 filebrowser -d "$FB_DB" -r "$NETWORK_VOLUME" -a 0.0.0.0 -p 8080 \
     >> "$STARTUP_LOG" 2>&1 &
 
