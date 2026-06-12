@@ -44,8 +44,8 @@ comfyui-restart --disable-smart-memory --lowvram
 ```
 
 ### Deploy
-- RunPod  - https://tinyurl.com/327m5d3t
-- Vast.ai - https://tinyurl.com/bde34k5a
+- RunPod  - https://tinyurl.com/5f9bpe43
+- Vast.ai - https://tinyurl.com/2v8fvune
 
 ### Variables Selection
 
