@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         python3 python3-venv python3-dev python3-pip \
-        curl zip unzip ffmpeg ninja-build git aria2 git-lfs wget vim rsync \
+        curl zip unzip dnsutils ffmpeg ninja-build git aria2 git-lfs wget vim rsync \
         libgl1 libglib2.0-0 libgoogle-perftools4 build-essential libsm6 libxext6 libxrender1 \
         libusb-1.0-0 gcc openssh-server && \
     \
@@ -166,67 +166,67 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         https://github.com/TenStrip/10S-Comfy-nodes.git \
         https://github.com/Lightricks/ComfyUI-LTXVideo.git; \
     do \
-        # Explicitly save baseline root path context
-        START_DIR=$(pwd); \
+        # Get the clean folder name (e.g., ComfyUI-GGUF)
+        repo_dir=$(basename "$repo" .git); \
         \
-        # Isolated target file fetching 
         if [ "$repo" = "https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git" ]; then \
-            git clone --depth 1 --recursive "$repo" tmp_clone_dir; \
+            git clone --depth 1 --recursive "$repo" "$repo_dir"; \
         else \
-            git clone --depth 1 "$repo" tmp_clone_dir; \
+            git clone --depth 1 "$repo" "$repo_dir"; \
         fi; \
-        \
-        # Dynamically read out real folder layout signature
-        cd tmp_clone_dir && repo_dir=$(basename "$(pwd)") && cd ..; \
-        mv tmp_clone_dir "$repo_dir"; \
         \
         echo "CIRCLECI_HEARTBEAT: Resolved folder [$repo_dir] for target engine install."; \
         \
+        # CD directly into the node folder so updates and setup scripts operate safely
+        cd "$repo_dir"; \
+        \
         # ComfyUI-Frame-Interpolation specialized sed patch
         if [ "$repo_dir" = "ComfyUI-Frame-Interpolation" ]; then \
-            if [ -f "$repo_dir/requirements-with-cupy.txt" ]; then \
+            if [ -f "requirements-with-cupy.txt" ]; then \
                 echo "🛠️ Harmonizing ComfyUI-Frame-Interpolation cupy requirements..."; \
-                sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$repo_dir/requirements-with-cupy.txt"; \
-                sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$repo_dir/requirements-with-cupy.txt"; \
-                sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$repo_dir/requirements-with-cupy.txt"; \
-                sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$repo_dir/requirements-with-cupy.txt"; \
-                sed -i -E 's/^Pillow([>=<~= ]+[0-9.]+)?$/# Pillow already installed/g' "$repo_dir/requirements-with-cupy.txt"; \
-                sed -i -E 's/^cupy-wheel$/cupy-cuda12x/g' "$repo_dir/requirements-with-cupy.txt"; \
+                # Overwrite requirements.txt with the cupy configuration
+                cp "requirements-with-cupy.txt" "requirements.txt"; \
+                sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "requirements.txt"; \
+                sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "requirements.txt"; \
+                sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "requirements.txt"; \
+                sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "requirements.txt"; \
+                sed -i -E 's/^Pillow([>=<~= ]+[0-9.]+)?$/# Pillow already installed/g' "requirements.txt"; \
+                sed -i -E 's/^cupy-wheel$/cupy-cuda12x/g' "requirements.txt"; \
             fi; \
         fi; \
         \
         # 4. Harmonize and Install Requirements
-        if [ -f "$repo_dir/requirements.txt" ]; then \
+        if [ -f "requirements.txt" ]; then \
             echo "🛠️ Harmonizing Dependencies for $repo_dir..."; \
             \
-            sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^[Pp]illow([>=<~= ]+[0-9.]+)?$/# Pillow already installed/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/bitsandbytes([>=<~= ]+[0-9.]+)?/bitsandbytes/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^protobuf[>=<~=,. 0-9]+$/protobuf/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^onnxruntime(-gpu)?([>=<~=,. 0-9]+)?$/onnxruntime-gpu/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^torchaudio([>=<~= ]+[0-9.]+)?$/# torchaudio already installed/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^numba([>=<~= ]+[0-9.]+)?$/numba/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^ninja([>=<~=~ ]+[0-9.]+)?$/ninja/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^clip[-_]interrogator([>=<~= ]+[0-9.]+)?$/clip-interrogator/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^transformers(\[[a-zA-Z0-9_,]+\])?([>=<~= ]+[0-9.]+)?$/transformers/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^insightface([>=<~= ]+[0-9.]+)?$/insightface==1.0.1/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^diffusers([>=<~= ]+[0-9.]+)?$/# diffusers already installed/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^huggingface-hub([>=<~= ]+[0-9.]+)?$/# huggingface-hub already installed/g' "$repo_dir/requirements.txt"; \
-            sed -i -E 's/^(segment-anything|transparent-background)([>=<~= ]+[0-9.]+)?$/# segmentation tooling already installed/g' "$repo_dir/requirements.txt"; \
+            sed -i -E 's/opencv-(python|contrib-python)(-headless)?(\[[a-zA-Z0-9_-]+\])?(==[0-9.]+)?/opencv-contrib-python-headless/g' "requirements.txt"; \
+            sed -i -E 's/^[Pp]illow([>=<~= ]+[0-9.]+)?$/# Pillow already installed/g' "requirements.txt"; \
+            sed -i -E 's/bitsandbytes([>=<~= ]+[0-9.]+)?/bitsandbytes/g' "requirements.txt"; \
+            sed -i -E 's/^protobuf[>=<~=,. 0-9]+$/protobuf/g' "requirements.txt"; \
+            sed -i -E 's/^onnxruntime(-gpu)?([>=<~=,. 0-9]+)?$/onnxruntime-gpu/g' "requirements.txt"; \
+            sed -i -E 's/^torch([>=<~= ]+[0-9.]+)?$/# torch already installed/g' "requirements.txt"; \
+            sed -i -E 's/^torchvision([>=<~= ]+[0-9.]+)?$/# torchvision already installed/g' "requirements.txt"; \
+            sed -i -E 's/^torchaudio([>=<~= ]+[0-9.]+)?$/# torchaudio already installed/g' "requirements.txt"; \
+            sed -i -E 's/^numpy([>=<~= ]+[0-9.]+)?$/# numpy already installed/g' "requirements.txt"; \
+            sed -i -E 's/^numba([>=<~= ]+[0-9.]+)?$/numba/g' "requirements.txt"; \
+            sed -i -E 's/^ninja([>=<~=~ ]+[0-9.]+)?$/ninja/g' "requirements.txt"; \
+            sed -i -E 's/^clip[-_]interrogator([>=<~= ]+[0-9.]+)?$/clip-interrogator/g' "requirements.txt"; \
+            sed -i -E 's/^transformers(\[[a-zA-Z0-9_,]+\])?([>=<~= ]+[0-9.]+)?$/transformers/g' "requirements.txt"; \
+            sed -i -E 's/^insightface([>=<~= ]+[0-9.]+)?$/insightface==1.0.1/g' "requirements.txt"; \
+            sed -i -E 's/^diffusers([>=<~= ]+[0-9.]+)?$/# diffusers already installed/g' "requirements.txt"; \
+            sed -i -E 's/^huggingface-hub([>=<~= ]+[0-9.]+)?$/# huggingface-hub already installed/g' "requirements.txt"; \
+            sed -i -E 's/^(segment-anything|transparent-background)([>=<~= ]+[0-9.]+)?$/# segmentation tooling already installed/g' "requirements.txt"; \
             \
-            pip install --progress-bar off -v -r "$repo_dir/requirements.txt"; \
+            pip install --progress-bar off -v -r "requirements.txt"; \
         fi; \
         \
         # 5. Run install.py if it exists
-        if [ -f "$repo_dir/install.py" ]; then \
-            python "$repo_dir/install.py"; \
+        if [ -f "install.py" ]; then \
+            python "install.py"; \
         fi; \
         \
         # Absolute restoration of working directory parent node 
-        cd "$START_DIR"; \
+        cd /ComfyUI/custom_nodes; \
     done
 
 # 8. Freeze and lock the completely populated environment safely here
@@ -236,8 +236,6 @@ ENV PIP_CONSTRAINT=/etc/pip_constraints.txt
 # 9. Final Assets & Entrypoint
 COPY src/start_script.sh /start_script.sh
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-COPY Eyes.pt /Eyes.pt
-COPY 4xLSDIR.pth /4xLSDIR.pth
 
 RUN chmod +x /start_script.sh /docker-entrypoint.sh
 

@@ -127,12 +127,6 @@ VRAM_THRESHOLD=32000
 
 BASE_FLAGS="--listen --preview-method auto"
 
-if [ "${USE_FP8_TEXT_ENC:-true}" = "true" ]; then
-    BASE_FLAGS="$BASE_FLAGS --fp8_e4m3fn-text-enc"
-fi
-if [ "${USE_FP8_MODEL:-}" = "true" ]; then
-    BASE_FLAGS="$BASE_FLAGS --fp8_e4m3fn-unet"
-fi
 if [ "$GPU_VRAM_MB" -ge "$VRAM_THRESHOLD" ]; then
     BASE_FLAGS="$BASE_FLAGS --highvram"
 fi

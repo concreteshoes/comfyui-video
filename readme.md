@@ -73,10 +73,11 @@ DOWNLOAD_JOYCAPTION=""
 DOWNLOAD_FLORENCE2=""
 ```
 
-This image comes with JupyterLab, Filebrowser and rclone. Specify the password
-you want to use for Filebrowser:
+This image comes with JupyterLab, Filebrowser and rclone. To increase security you are
+required to provide password for both JupyterLab and Filebrowser.
+Use username `admin` for Filebrowser.
 ```env
-FB_PASSWORD=""
+USER_PASSWORD=""
 ```
 
 The Civitai Downloader allows you to download specific models upon deployment by

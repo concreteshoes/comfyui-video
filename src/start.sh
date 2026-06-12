@@ -43,6 +43,10 @@ mkdir -p "$NETWORK_VOLUME/logs"
 STARTUP_LOG="$NETWORK_VOLUME/logs/startup.log"
 echo "--- Startup log $(date) ---" >> "$STARTUP_LOG"
 
+# Add these lines to initialize the separate downloads log
+DOWNLOADS_LOG="$NETWORK_VOLUME/logs/downloads.log"
+echo "--- Downloads log $(date) ---" >> "$DOWNLOADS_LOG"
+
 # Explicitly set the python path
 PYTHON_BIN="/usr/bin/python3"
 
@@ -223,22 +227,32 @@ fi
 # ============================================================
 status_msg "[2/4] Checking SageAttention"
 
+SAGE_ATTENTION_AVAILABLE=false # Safe default
+
 if $PYTHON_BIN -c "import sageattention" &> /dev/null; then
     status_msg "SageAttention already installed. Skipping build."
     SAGE_ATTENTION_AVAILABLE=true
-else
-    # Only attempt install if NOT already installed AND architecture is supported
-    if echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
-        status_msg "Supported architecture ($CUDA_ARCH) detected. Installing SageAttention 2..."
-        run_quiet "SageAttention V2" pip install --no-cache-dir --no-build-isolation git+https://github.com/thu-ml/SageAttention.git@main
 
+elif echo "$CUDA_ARCH" | grep -Eq '(^|;)(80|86|89|90|100|120)($|;)'; then
+    status_msg "Supported architecture ($CUDA_ARCH) detected. Installing SageAttention 2..."
+
+    if run_quiet "SageAttention V2" pip install --no-cache-dir --no-build-isolation git+https://github.com/thu-ml/SageAttention.git@main; then
         # Link libcuda for the kernels
         ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so
-        SAGE_ATTENTION_AVAILABLE=true
+
+        # Verify the install actually produced an importable module
+        if $PYTHON_BIN -c "import sageattention" &> /dev/null; then
+            status_msg "SageAttention installed and verified."
+            SAGE_ATTENTION_AVAILABLE=true
+        else
+            echo "       ⚠️ SageAttention installed but failed import check. Disabling."
+        fi
     else
-        status_msg "Unsupported architecture ($CUDA_ARCH). Skipping SageAttention."
-        SAGE_ATTENTION_AVAILABLE=false
+        echo "       ⚠️ SageAttention install failed (see $STARTUP_LOG). Disabling."
     fi
+
+else
+    status_msg "Unsupported architecture ($CUDA_ARCH). Skipping SageAttention."
 fi
 
 # ============================================================
@@ -246,9 +260,54 @@ fi
 # ============================================================
 status_msg "[3/4] Setting up workspace..."
 
+# 1. Sync the RunPod helper repo from /tmp to Volume
+if [ -d "/tmp/comfyui-video" ]; then
+    # If it already exists on volume, remove old training configs to ensure we use latest from Git
+    # but keep the directory structure clean.
+    if [ -d "$NETWORK_VOLUME/comfyui-video" ]; then
+        rm -rf "$NETWORK_VOLUME/comfyui-video"
+    fi
+    mv /tmp/comfyui-video "$NETWORK_VOLUME/"
+
+    # Move specific training subfolders to the Volume Root for easier access
+    for dir in workflows; do
+        if [ -d "$NETWORK_VOLUME/comfyui-video/$dir" ]; then
+            rm -rf "$NETWORK_VOLUME/$dir" # Remove old version
+            mv "$NETWORK_VOLUME/comfyui-video/$dir" "$NETWORK_VOLUME/"
+        fi
+    done
+
+    # Move and fix script permissions
+    for script in rclone_configuration.sh; do
+        if [ -f "$NETWORK_VOLUME/comfyui-video/$script" ]; then
+            mv "$NETWORK_VOLUME/comfyui-video/$script" "$NETWORK_VOLUME/"
+            chmod +x "$NETWORK_VOLUME/$script"
+        fi
+    done
+
+    # Move utility files
+    for utility in readme.md 4xLSDIR.pth Eyes.pt; do
+        if [ -f "$NETWORK_VOLUME/comfyui-video/$utility" ]; then
+            mv "$NETWORK_VOLUME/comfyui-video/$utility" "$NETWORK_VOLUME/"
+        fi
+    done
+fi
+
 echo "Starting JupyterLab in $NETWORK_VOLUME"
+
+# 1. Fall back to 'admin' if USER_PASSWORD isn't defined, matching Filebrowser
+JUPYTER_SECURE_TOKEN="${USER_PASSWORD:-admin}"
+
+# 2. Export the token to the environment so Jupyter picks it up securely
+export JUPYTER_TOKEN="$JUPYTER_SECURE_TOKEN"
+
+# 3. Persist it for SSH sessions if someone attaches later
+printf 'export JUPYTER_TOKEN=%q\n' "$JUPYTER_SECURE_TOKEN" >> /etc/profile.d/container_env.sh
+
+# 4. Launch JupyterLab securely
+# Note: Removed the empty token/password overrides so Jupyter enforces the JUPYTER_TOKEN env var.
+# Kept allow_origin='*' as it is often required for Vast.ai/RunPod proxy URL mappings to render the UI.
 jupyter-lab --ip=0.0.0.0 --allow-root --no-browser \
-    --NotebookApp.token='' --NotebookApp.password='' \
     --ServerApp.allow_origin='*' --ServerApp.allow_credentials=True \
     --notebook-dir="$NETWORK_VOLUME" >> "$STARTUP_LOG" 2>&1 &
 
@@ -271,7 +330,7 @@ filebrowser -d "$FB_DB" config set \
     --minimumPasswordLength 1 > /dev/null 2>&1
 
 # 5. Create user with the raw, unpadded password
-RAW_PASS="${FB_PASSWORD:-admin}"
+RAW_PASS="${USER_PASSWORD:-admin}"
 
 filebrowser -d "$FB_DB" users add admin "$RAW_PASS" --perm.admin > /dev/null 2>&1 \
     || filebrowser -d "$FB_DB" users update admin --password "$RAW_PASS" --perm.admin > /dev/null 2>&1
@@ -321,7 +380,6 @@ else
     status_msg "Restart detected: Syncing latest Image changes to Volume..."
     # Force sync native core changes from your freshly built Docker image layers
     cp -ruvT /ComfyUI "$COMFYUI_DIR"
-    rm -rf /ComfyUI
     echo "✅ Sync complete."
 
     # 🔄 SMART SYNC: Only engage on persistent storage restarts
@@ -451,23 +509,24 @@ download_model() {
     mkdir -p "$destination_dir"
 
     if [ -f "${full_path}.aria2" ]; then
-        echo "⏳ Partial download state found for $destination_file. Resuming..."
+        echo "⏳ Partial download state found for $destination_file. Resuming..." >> "$DOWNLOADS_LOG"
 
     elif [ -f "$full_path" ]; then
         local size_bytes=$(stat -f%z "$full_path" 2> /dev/null || stat -c%s "$full_path" 2> /dev/null || echo 0)
         local size_mb=$((size_bytes / 1024 / 1024))
 
         if [ "$size_bytes" -lt 10485760 ] && [ "$skip_size_check" != "true" ]; then
-            echo "🗑️  Deleting corrupted placeholder file (${size_mb}MB < 10MB): $full_path"
+            echo "🗑️  Deleting corrupted placeholder file (${size_mb}MB < 10MB): $full_path" >> "$DOWNLOADS_LOG"
             rm -f "$full_path"
         else
-            echo "✅ $destination_file already exists (${size_mb}MB), skipping download."
-            LAST_DOWNLOAD_PID="" # ← clear it so caller knows no job was started
+            echo "✅ $destination_file already exists (${size_mb}MB), skipping download." >> "$DOWNLOADS_LOG"
             return 0
         fi
     fi
 
-    echo "📥 Background download scheduled for $destination_file..."
+    echo "📥 Downloading $destination_file..." >> "$DOWNLOADS_LOG"
+
+    # Notice: NO trailing '&' at the end of this command block
     aria2c -x 8 -s 8 -k 4M \
         --continue=true \
         --file-allocation=none \
@@ -478,8 +537,15 @@ download_model() {
         --console-log-level=error \
         -d "$destination_dir" \
         -o "$destination_file" \
-        "$url" &
-    LAST_DOWNLOAD_PID=$! # ← capture before anything else can overwrite $!
+        "$url" >> "$DOWNLOADS_LOG" 2>&1
+
+    # Now this code accurately captures whether aria2c succeeded or failed!
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        echo "❌ Error: Failed to download $destination_file (Exit Code: $exit_code)" >> "$DOWNLOADS_LOG"
+        return $exit_code
+    fi
+    return 0
 }
 
 # ============================================================
@@ -668,11 +734,9 @@ fi
 
 if [ "${DOWNLOAD_FLORENCE2:-}" = "true" ]; then
     echo "📥 Downloading Florence-2 NSFW finetune..."
-
-    # Base URL for the finetune
     NSFW_BASE_URL="https://huggingface.co/ljnlonoljpiljm/florence-2-base-nsfw-v2/resolve/main"
 
-    # 1. Core Configuration & Tokenizer
+    # Core Configuration & Tokenizer
     download_model "$NSFW_BASE_URL/config.json" "$FLORENCE2_DIR/config.json" true
     download_model "$NSFW_BASE_URL/generation_config.json" "$FLORENCE2_DIR/generation_config.json" true
     download_model "$NSFW_BASE_URL/preprocessor_config.json" "$FLORENCE2_DIR/preprocessor_config.json" true
@@ -683,27 +747,23 @@ if [ "${DOWNLOAD_FLORENCE2:-}" = "true" ]; then
     download_model "$NSFW_BASE_URL/tokenizer_config.json" "$FLORENCE2_DIR/tokenizer_config.json" true
     download_model "$NSFW_BASE_URL/vocab.json" "$FLORENCE2_DIR/vocab.json" true
 
-    # 2. The Weights
-    download_model "$NSFW_BASE_URL/model.safetensors" "$FLORENCE2_DIR/model.safetensors"
+    # The Weights - check if this main file downloads successfully
+    if download_model "$NSFW_BASE_URL/model.safetensors" "$FLORENCE2_DIR/model.safetensors"; then
+        # Microsoft Processor
+        download_model "https://huggingface.co/microsoft/Florence-2-base/resolve/main/processing_florence2.py" "$FLORENCE2_DIR/processing_florence2.py" true
 
-    # 3. Microsoft Processor (Handles the actual image bounding boxes/cropping)
-    download_model "https://huggingface.co/microsoft/Florence-2-base/resolve/main/processing_florence2.py" "$FLORENCE2_DIR/processing_florence2.py" true
+        # APPLY THE KIJAI / LAYERSTYLE PATCH (Now safely runs AFTER download completes)
+        echo "🔧 Applying Transformers compatibility patch for Florence-2..."
+        LAYERSTYLE_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/custom_nodes/ComfyUI_LayerStyle_Advance/florence2_models"
 
-    # 4. APPLY THE KIJAI / LAYERSTYLE PATCH
-    # We copy the patched modeling and config files directly from the custom node directory
-    # to overwrite any missing or outdated files, ensuring transformers >= 4.45 compatibility.
-    echo "🔧 Applying Transformers compatibility patch for Florence-2..."
-    LAYERSTYLE_MODELS_DIR="$NETWORK_VOLUME/ComfyUI/custom_nodes/ComfyUI_LayerStyle_Advance/florence2_models"
-
-    if [ -d "$LAYERSTYLE_MODELS_DIR" ]; then
-        cp "$LAYERSTYLE_MODELS_DIR/modeling_florence2.py" "$FLORENCE2_DIR/"
-        cp "$LAYERSTYLE_MODELS_DIR/configuration_florence2.py" "$FLORENCE2_DIR/"
-        echo "✅ Florence-2 patched successfully."
-    else
-        echo "⚠️ WARNING: LayerStyle advance folder not found at $LAYERSTYLE_MODELS_DIR. Patch skipped."
+        if [ -d "$LAYERSTYLE_MODELS_DIR" ]; then
+            cp "$LAYERSTYLE_MODELS_DIR/modeling_florence2.py" "$FLORENCE2_DIR/"
+            cp "$LAYERSTYLE_MODELS_DIR/configuration_florence2.py" "$FLORENCE2_DIR/"
+            echo "✅ Florence-2 patched successfully."
+        else
+            echo "⚠️ WARNING: LayerStyle advance folder not found at $LAYERSTYLE_MODELS_DIR. Patch skipped."
+        fi
     fi
-
-    echo "📋 Florence-2 NSFW model queued for background download"
 fi
 
 # ==========================================
@@ -806,46 +866,32 @@ download_model "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/i
 
 echo "📋 Dependency weights queued for background download"
 
+# ============================================================
+# Deploy Companion Assets into ComfyUI Structure
+# ============================================================
 if [ ! -f "$ULTRALYTICS_DIR/bbox/Eyes.pt" ]; then
-    if [ -f "/Eyes.pt" ]; then
-        mv "/Eyes.pt" "$ULTRALYTICS_DIR/bbox/Eyes.pt"
-        echo "Moved Eyes.pt to the correct location."
-    else
-        echo "Eyes.pt not found in the root directory."
+    if [ -f "$NETWORK_VOLUME/Eyes.pt" ]; then
+        mkdir -p "$ULTRALYTICS_DIR/bbox"
+        mv "$NETWORK_VOLUME/Eyes.pt" "$ULTRALYTICS_DIR/bbox/Eyes.pt"
+        echo "✅ Moved Eyes.pt to Ultralytics bbox directory." >> "$STARTUP_LOG"
     fi
-else
-    echo "Eyes.pt already exists. Skipping."
 fi
 
 if [ ! -f "$UPSCALE_MODELS_DIR/4xLSDIR.pth" ]; then
-    if [ -f "/4xLSDIR.pth" ]; then
-        mv "/4xLSDIR.pth" "$UPSCALE_MODELS_DIR/4xLSDIR.pth"
-        echo "Moved 4xLSDIR.pth to the correct location."
-    else
-        echo "4xLSDIR.pth not found in the root directory."
+    if [ -f "$NETWORK_VOLUME/4xLSDIR.pth" ]; then
+        mkdir -p "$UPSCALE_MODELS_DIR"
+        mv "$NETWORK_VOLUME/4xLSDIR.pth" "$UPSCALE_MODELS_DIR/4xLSDIR.pth"
+        echo "✅ Moved 4xLSDIR.pth to Upscale Models directory." >> "$STARTUP_LOG"
     fi
-else
-    echo "4xLSDIR.pth already exists. Skipping."
 fi
 
 # ============================================================
-# OPTIMIZED ANTELOPEV2 ENGINE (Integrated with custom fn)
+# OPTIMIZED ANTELOPEV2 ENGINE
 # ============================================================
-
-# Only trigger if the target directory doesn't have the final .onnx models
 if [ ! -d "$ANTELOPEV2_DIR" ] || [ -z "$(ls -A "$ANTELOPEV2_DIR" 2> /dev/null | grep '\.onnx$')" ]; then
     echo "📥 AntelopeV2 models missing. Launching download allocation..."
 
-    # Call your custom function
-    download_model "https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip" "$ANTELOPEV2_DIR/antelopev2.zip"
-
-    if [ ! -f "$ANTELOPEV2_DIR/antelopev2.zip" ] || [ -f "$ANTELOPEV2_DIR/antelopev2.zip.aria2" ]; then
-        echo "⏳ Active download detected. Holding script execution until aria2c finishes..."
-        wait "$LAST_DOWNLOAD_PID" 2> /dev/null || true
-    fi
-
-    # Proceed to extraction now that the file is fully on disk
-    if [ -f "$ANTELOPEV2_DIR/antelopev2.zip" ]; then
+    if download_model "https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip" "$ANTELOPEV2_DIR/antelopev2.zip"; then
         echo "📦 Extracting and flattening AntelopeV2 assets..."
         unzip -oj "$ANTELOPEV2_DIR/antelopev2.zip" -d "$ANTELOPEV2_DIR"
 
@@ -889,7 +935,7 @@ fi
 # WORKFLOWS MIGRATION
 # ============================================================
 
-SOURCE_DIR="/comfyui-video/workflows"
+SOURCE_DIR="/workflows"
 
 # Ensure destination directory exists
 mkdir -p "$WORKFLOW_DIR"
@@ -992,8 +1038,9 @@ for TARGET_DIR in "${!MODEL_CATEGORIES[@]}"; do
         CLEAN_ID="${MODEL_ID// /}"
         [ -z "$CLEAN_ID" ] && continue
 
-        echo "🚀 Scheduling CivitAI download: $CLEAN_ID to $TARGET_DIR"
-        (cd "$TARGET_DIR" && $PYTHON_BIN /usr/local/bin/download_with_aria.py -m "$CLEAN_ID") &
+        # Redirect the scheduling notification and the python script output to the downloads log
+        echo "🚀 Scheduling CivitAI download: $CLEAN_ID to $TARGET_DIR" >> "$DOWNLOADS_LOG"
+        (cd "$TARGET_DIR" && $PYTHON_BIN /usr/local/bin/download_with_aria.py -m "$CLEAN_ID") >> "$DOWNLOADS_LOG" 2>&1 &
         download_pids+=($!)
         ((download_count++))
     done
@@ -1004,24 +1051,15 @@ echo "📋 Scheduled $download_count downloads in background."
 # ============================================================
 # CRITICAL BOUNDARY: Block thread until background jobs finish
 # ============================================================
-
 if [ "$download_count" -gt 0 ]; then
-    echo "⏳ Holding boot sequence: Waiting for $download_count background model downloads to complete..."
+    echo "⏳ Holding boot sequence: Waiting for $download_count background CivitAI downloads to complete..."
     wait "${download_pids[@]}"
-    echo "✅ All background model downloads have finished successfully!"
+    echo "✅ All background CivitAI model downloads have finished!"
 else
-    echo "✅ No background downloads were required."
+    echo "✅ No background CivitAI downloads were required."
 fi
 
-# Final catch-all safety wall for any lingering aria2c tasks
-if pgrep -x "aria2c" > /dev/null; then
-    echo "⏳ Waiting for lingering aria2c processes to completely close..."
-    while pgrep -x "aria2c" > /dev/null; do
-        sleep 5
-    done
-fi
-
-echo "✅ All models downloaded successfully!"
+echo "✅ All models verified successfully!"
 
 # ============================================================
 # ComfyUI
@@ -1262,6 +1300,6 @@ echo "✅ SSH ready."
 status_msg "Initialization complete"
 
 # Stream the log to the container output so 'docker logs' works
-tail -f "$NETWORK_VOLUME/comfyui_nohup.log" &
+tail -F "$NETWORK_VOLUME/comfyui_nohup.log" &
 
 sleep infinity
