@@ -498,6 +498,10 @@ else
     echo "✅ CivitAI Downloader already exists."
 fi
 
+if [ -z "${CIVITAI_TOKEN:-}" ]; then
+    echo "⚠️  CIVITAI_TOKEN is not set — CivitAI downloads will be skipped"
+fi
+
 download_model() {
     local url="$1"
     local full_path="$2"
@@ -1038,9 +1042,13 @@ for TARGET_DIR in "${!MODEL_CATEGORIES[@]}"; do
         CLEAN_ID="${MODEL_ID// /}"
         [ -z "$CLEAN_ID" ] && continue
 
-        # Redirect the scheduling notification and the python script output to the downloads log
+        if [ -z "${CIVITAI_TOKEN:-}" ]; then
+            echo "⏭️  Skipping CivitAI download ($CLEAN_ID): no token set" >> "$DOWNLOADS_LOG"
+            continue
+        fi
+
         echo "🚀 Scheduling CivitAI download: $CLEAN_ID to $TARGET_DIR" >> "$DOWNLOADS_LOG"
-        (cd "$TARGET_DIR" && $PYTHON_BIN /usr/local/bin/download_with_aria.py -m "$CLEAN_ID") >> "$DOWNLOADS_LOG" 2>&1 &
+        $PYTHON_BIN /usr/local/bin/download_with_aria.py -m "$CLEAN_ID" -o "$TARGET_DIR" >> "$DOWNLOADS_LOG" 2>&1 &
         download_pids+=($!)
         ((download_count++))
     done
@@ -1157,7 +1165,7 @@ echo $! > /tmp/comfyui.pid # Save PID for restart
 # ============================================================
 
 # We use a quoted heredoc 'EOF' here to keep the inner variables intact for live runtime evaluation!
-cat << 'EOF' > /usr/local/bin/comfyui-restart
+cat << 'EOF' > "$NETWORK_VOLUME"/comfyui-restart
 #!/bin/bash
 
 # Live-resolve environment paths
@@ -1174,7 +1182,7 @@ fi
 [ -f "../comfyui_nohup.log" ] && LOG_FILE="../comfyui_nohup.log"
 
 echo "🛑 Stopping running ComfyUI process..."
-kill $(cat /tmp/comfyui.pid 2>/dev/null) 2>/dev/null
+[ -s /tmp/comfyui.pid ] && kill "$(cat /tmp/comfyui.pid)" 2>/dev/null
 sleep 2
 
 # RE-EVALUATE HARDWARE ENVIRONMENT LIVE
@@ -1220,7 +1228,7 @@ echo $! > /tmp/comfyui.pid
 echo "✅ ComfyUI successfully restarted with PID $(cat /tmp/comfyui.pid)"
 EOF
 
-chmod +x /usr/local/bin/comfyui-restart
+chmod +x "$NETWORK_VOLUME"/comfyui-restart
 
 # Timeout logic
 counter=0
