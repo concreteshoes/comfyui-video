@@ -487,12 +487,12 @@ fi
 
 # Acquiring CivitAI Downloader and required models
 echo "📥 Setting up CivitAI Downloader..."
-if [ ! -f "/usr/local/bin/download_with_aria.py" ]; then
+if [ ! -f "$NETWORK_VOLUME/download_with_aria.py" ]; then
     $PYTHON_BIN -m pip install requests tqdm
-
     git clone "https://github.com/concreteshoes/CivitAI_Downloader.git" /tmp/CivitAI_Downloader || echo "Git clone failed"
-    mv /tmp/CivitAI_Downloader/download_with_aria.py "/usr/local/bin/" || echo "Move failed"
-    chmod +x "/usr/local/bin/download_with_aria.py" || echo "Chmod failed"
+    mv /tmp/CivitAI_Downloader/download_with_aria.py "$NETWORK_VOLUME/" || echo "Move failed"
+    mv /tmp/CivitAI_Downloader/README.md "$NETWORK_VOLUME/CivitaiDownloader_readme.md" || echo "Move failed"
+    chmod +x "$NETWORK_VOLUME/download_with_aria.py" || echo "Chmod failed"
     rm -rf /tmp/CivitAI_Downloader
 else
     echo "✅ CivitAI Downloader already exists."
@@ -1048,7 +1048,7 @@ for TARGET_DIR in "${!MODEL_CATEGORIES[@]}"; do
         fi
 
         echo "🚀 Scheduling CivitAI download: $CLEAN_ID to $TARGET_DIR" >> "$DOWNLOADS_LOG"
-        $PYTHON_BIN /usr/local/bin/download_with_aria.py -m "$CLEAN_ID" -o "$TARGET_DIR" >> "$DOWNLOADS_LOG" 2>&1 &
+        $PYTHON_BIN "$NETWORK_VOLUME/download_with_aria.py" -m "$CLEAN_ID" -o "$TARGET_DIR" >> "$DOWNLOADS_LOG" 2>&1 &
         download_pids+=($!)
         ((download_count++))
     done
