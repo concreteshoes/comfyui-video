@@ -1009,7 +1009,6 @@ echo "✅ Model whitelist successfully initialized!"
 # ============================================================
 # DYNAMIC CIVITAI DOWNLOAD ENGINE
 # ============================================================
-
 # Ensure the new UNET target path exists on the volume if GGUF downloads are requested
 if [ -n "$GGUF_IDS_TO_DOWNLOAD" ] && [ "$GGUF_IDS_TO_DOWNLOAD" != "replace_with_ids" ]; then
     mkdir -p "$GGUF_DIR"
@@ -1024,14 +1023,13 @@ declare -A MODEL_CATEGORIES
 [ -n "$BASE_MODEL_IDS_TO_DOWNLOAD" ] && MODEL_CATEGORIES["$DIFFUSION_MODELS_DIR"]="$BASE_MODEL_IDS_TO_DOWNLOAD"
 [ -n "$GGUF_IDS_TO_DOWNLOAD" ] && MODEL_CATEGORIES["$GGUF_DIR"]="$GGUF_IDS_TO_DOWNLOAD"
 
-# Counter and PID tracking
-download_count=0
-download_pids=()
+# ISOLATED TRACKING: Prevents clobbering any downloads initiated earlier in start.sh
+civitai_count=0
+civitai_pids=()
 
 # Schedule downloads in background
 for TARGET_DIR in "${!MODEL_CATEGORIES[@]}"; do
     MODEL_IDS_STRING="${MODEL_CATEGORIES[$TARGET_DIR]}"
-
     if [[ "$MODEL_IDS_STRING" == "replace_with_ids" ]]; then
         echo "⏭️  Skipping downloads for $TARGET_DIR (Default placeholder detected)"
         continue
@@ -1048,13 +1046,65 @@ for TARGET_DIR in "${!MODEL_CATEGORIES[@]}"; do
         fi
 
         echo "🚀 Scheduling CivitAI download: $CLEAN_ID to $TARGET_DIR" >> "$DOWNLOADS_LOG"
+
+        # Ensure the target directory exists before downloading into it
+        mkdir -p "$TARGET_DIR"
+
         $PYTHON_BIN "$NETWORK_VOLUME/download_with_aria.py" -m "$CLEAN_ID" -o "$TARGET_DIR" >> "$DOWNLOADS_LOG" 2>&1 &
-        download_pids+=($!)
-        ((download_count++))
+        civitai_pids+=($!)
+        ((civitai_count++))
     done
 done
 
-echo "📋 Scheduled $download_count downloads in background."
+echo "📋 Scheduled $civitai_count CivitAI downloads in background."
+
+# ============================================================
+# CRITICAL BOUNDARY: Wait only for CivitAI & post-process zips
+# ============================================================
+if [ "$civitai_count" -gt 0 ]; then
+    echo "⏳ Holding boot sequence: Waiting for $civitai_count background CivitAI downloads to complete..."
+    echo "⏳ Waiting for $civitai_count CivitAI download(s) to complete..." >> "$DOWNLOADS_LOG"
+
+    # Explicitly wait ONLY for the PIDs generated in this specific block
+    for pid in "${civitai_pids[@]}"; do
+        wait "$pid"
+    done
+
+    echo "✅ All background CivitAI model downloads have finished!"
+    echo "✅ CivitAI downloads finished. Starting zip check..." >> "$DOWNLOADS_LOG"
+
+    # Scan CivitAI directories for zip post-processing
+    for TARGET_DIR in "${!MODEL_CATEGORIES[@]}"; do
+        MODEL_IDS_STRING="${MODEL_CATEGORIES[$TARGET_DIR]}"
+        if [[ "$MODEL_IDS_STRING" == "replace_with_ids" ]] || [ ! -d "$TARGET_DIR" ]; then
+            continue
+        fi
+
+        # Find and extract any leftover .zip files in the target folder
+        shopt -s nullglob
+        for zip_file in "$TARGET_DIR"/*.zip; do
+            if [ -f "$zip_file" ]; then
+                echo "📦 Unzipping $zip_file inside $TARGET_DIR..." >> "$DOWNLOADS_LOG"
+
+                # -o: overwrite existing files without prompting
+                # -d: extract directly into the target directory
+                unzip -o "$zip_file" -d "$TARGET_DIR" >> "$DOWNLOADS_LOG" 2>&1
+
+                if [ $? -eq 0 ]; then
+                    echo "🗑️  Successfully extracted. Removing $zip_file..." >> "$DOWNLOADS_LOG"
+                    rm "$zip_file"
+                else
+                    echo "❌ Failed to unzip $zip_file. Keeping the archive." >> "$DOWNLOADS_LOG"
+                fi
+            fi
+        done
+        shopt -u nullglob
+    done
+else
+    echo "✅ No background CivitAI downloads were required."
+fi
+
+echo "✅ All CivitAI models verified successfully!"
 
 # ============================================================
 # CRITICAL BOUNDARY: Block thread until background jobs finish

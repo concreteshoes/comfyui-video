@@ -221,8 +221,8 @@ http://localhost:8188
 ```
 ---
 
-### Civitai Downloader
+#### Civitai Downloader
 
-## 📖 Usage
+##### 📖 Usage
 
 Please refer to the file `CivitaiDownloader_readme.md` on how to use the Civitai Downloader.
