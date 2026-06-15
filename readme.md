@@ -45,7 +45,7 @@ comfyui-restart --disable-smart-memory --lowvram
 
 ### Deploy
 - RunPod  - https://tinyurl.com/5f9bpe43
-- Vast.ai - https://tinyurl.com/2v8fvune
+- Vast.ai - https://tinyurl.com/mrxm7tuv
 
 ### Variables Selection
 
@@ -81,7 +81,8 @@ USER_PASSWORD=""
 ```
 
 The Civitai Downloader allows you to download specific models upon deployment by
-passing the following variables - to download multiple "438425,567890":
+passing the following variables - to download multiple: "2124694:2018880, 9876543:1234567"
+The first number is the `modelId` and the second the `fileId` you get from the URL.
 ```env
 CHECKPOINT_IDS_TO_DOWNLOAD=""
 LORAS_IDS_TO_DOWNLOAD=""
